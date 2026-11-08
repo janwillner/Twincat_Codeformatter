@@ -44,6 +44,9 @@ Im Menü **Extras → TcFormatter** steht nur, was es nicht per Rechtsklick gibt
 | Import Settings... | eine `.tcformat.json` (Formatierung und Namensregeln) oder einen STweep-Export (`.stweep`, nur Formatierung) als IDE-Einstellungen übernehmen |
 | Export Settings... | die IDE-Einstellungen als kommentierte `.tcformat.json` speichern, z. B. neben die `.sln`. Dann gilt sie für die ganze Projektmappe und alle, die sie auschecken. |
 
+Die Meldungen der Namensprüfung stehen in der Fehlerliste. Ein erneuter Check ersetzt sie, und **Clear** im
+Kontextmenü der Fehlerliste entfernt sie zusammen mit den TwinCAT-Meldungen.
+
 Protokoll im Ausgabefenster unter **TcFormatter**. Alle Befehle lassen sich auch skripten, z. B.
 `DTE.ExecuteCommand("TcFormatter.FormatSelection", "TIPC^Plc1^Plc1 Project^POUs")`.
 
@@ -205,3 +208,4 @@ Diagnose ohne modale Dialoge (z. B. über die TwinCAT-Automatisierung): `DTE.Exe
 baut beide Optionsseiten unsichtbar auf, wählt jede Option einmal aus und schreibt
 `%TEMP%\TcFormatter-options.txt` sowie Screenshots `%TEMP%\TcFormatter-options-*.png`.
 `"select:<Pfad>|format"` simuliert einen Rechtsklick auf einen Knoten des Projektmappen-Explorers.
+`"errorlist:run:OtherContextMenus.ErrorList.Clear"` führt „Clear“ der Fehlerliste aus und meldet danach die Zahl der Naming-Einträge.

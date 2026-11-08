@@ -71,6 +71,16 @@ namespace TcFormatter.Vsix.Ui
                 _provider.Show();
         }
 
+        /// <summary>Number of naming entries currently in the Error List.</summary>
+        public int Count => _provider.Tasks.Count;
+
+        /// <summary>Removes all naming entries from the Error List.</summary>
+        public void Clear()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            _provider.Tasks.Clear();
+        }
+
         public void Dispose() => _provider.Dispose();
     }
 }

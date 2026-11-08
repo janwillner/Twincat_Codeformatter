@@ -31,6 +31,12 @@ namespace TcFormatter.Vsix
 
         internal NamingErrorList ErrorList { get; private set; }
 
+        /// <summary>Removes the naming entries when TwinCAT's "Clear" in the Error List is used.</summary>
+        internal ErrorListClearHook ClearHook { get; private set; }
+
+        /// <summary>Why <see cref="ClearHook"/> could not be attached (diagnostics).</summary>
+        internal string ClearHookError { get; private set; }
+
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
@@ -41,6 +47,17 @@ namespace TcFormatter.Vsix
             Log = new OutputLog(this);
             ErrorList = new NamingErrorList(this, dte);
             new TcFormatterCommands(this, dte, Log, ErrorList).Register(commandService);
+
+            try
+            {
+                ClearHook = ErrorListClearHook.Attach(dte, ErrorList);
+                Log.Write("Error List 'Clear' also removes naming entries: " + ClearHook.Description);
+            }
+            catch (Exception ex)
+            {
+                ClearHookError = ex.ToString();
+                Log.Write("Could not attach to the Error List 'Clear' command: " + ex.Message);
+            }
 
             try
             {

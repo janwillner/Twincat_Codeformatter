@@ -71,6 +71,28 @@ namespace TcFormatter.Vsix.Commands
                     _log.Write(report);
                     return;
                 }
+                if (arg != null && arg.StartsWith("errorlist", StringComparison.OrdinalIgnoreCase))
+                {
+                    // "errorlist:run:<command>" first executes that command with the Error List active (like a click);
+                    // "errorlist:find:<text>" lists the commands whose name contains <text>
+                    string extra = string.Empty;
+                    if (arg.StartsWith("errorlist:run:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        try { Ui.ErrorListClearHook.RunInErrorList(_dte, arg.Substring("errorlist:run:".Length)); }
+                        catch (Exception ex) { extra += "run failed: " + ex.Message + "\n"; }
+                    }
+                    else if (arg.StartsWith("errorlist:find:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        extra += string.Join("\n", Ui.ErrorListClearHook.FindCommands(_dte, arg.Substring("errorlist:find:".Length))) + "\n";
+                    }
+                    if (_package.ClearHook != null)
+                        extra += "recent commands in the Error List: " + string.Join(" | ", _package.ClearHook.RecentErrorListCommands) + "\n";
+                    // hooked "Clear" command(s) and the current number of naming entries
+                    string report = $"clear hook: {_package.ClearHook?.Description ?? "(not attached) " + _package.ClearHookError}\nnaming entries: {_errors.Count}\n" + extra;
+                    File.WriteAllText(file, report);
+                    _log.Write(report);
+                    return;
+                }
                 if (arg != null && arg.StartsWith("select:", StringComparison.OrdinalIgnoreCase))
                 {
                     // select a Solution Explorer node (path of captions separated by '/') and report what the
