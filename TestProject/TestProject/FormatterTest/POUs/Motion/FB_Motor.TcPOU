@@ -85,7 +85,8 @@ VAR
 	bOk : BOOL;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[bOk := fSpeed > 0 AND fSpeed <= 3000;
+        <ST><![CDATA[bOk := fSpeed > 0
+	AND fSpeed <= 3000;
 IF bOk THEN
 	fSpeedSetpoint := fSpeed;
 	bEnable := TRUE;

@@ -88,11 +88,11 @@ Gesucht wird in dieser Reihenfolge, wie bei Black:
 
 | Gruppe | Optionen |
 |---|---|
-| Einrückung | `indentStyle` (Tabs/Spaces), `indentSize`, `continuationIndent`, `indentVarBlocks`, `indentStructMembers`, `indentCaseLabels`, `indentCaseBody`, `indentRegions` |
+| Einrückung | `indentStyle` (Tabs/Spaces), `indentSize`, `continuationIndent`, `indentConditionContinuation`, `alignContinuationToAssignment`, `indentVarBlocks`, `indentStructMembers`, `indentCaseLabels`, `indentCaseBody`, `indentRegions` |
 | Zeilen | `lineEnding` (Auto/CrLf/Lf), `maxConsecutiveBlankLines`, `removeBlankLinesAtBlockStart`, `removeBlankLinesAtBlockEnd`, `finalNewline`, `oneStatementPerLine`, `expandSingleLineBlocks`, `caseStatementOnNewLine`, `maxLineLength` |
-| Leerzeichen | `spaceAroundAssignment`, `spaceAroundOperators`, `spaceAfterComma`, `spaceBeforeComma`, `spaceInsideParentheses`, `spaceInsideBrackets`, `spaceBeforeCallParenthesis`, `spaceAfterArrayKeyword`, `spaceAroundRange`, `spaceBeforeColon`, `spaceAfterColon`, `spaceAfterLineCommentStart`, `spacesBeforeTrailingComment` |
+| Leerzeichen | `spaceAroundAssignment`, `spaceBeforeArgumentAssignment` (F2-Stil `IN:= x`), `spaceAroundOperators`, `spaceAfterComma`, `spaceBeforeComma`, `spaceInsideParentheses`, `spaceInsideBrackets`, `spaceBeforeCallParenthesis`, `spaceAfterArrayKeyword`, `spaceAroundRange`, `spaceBeforeColon`, `spaceAfterColon`, `spaceAfterLineCommentStart`, `spacesBeforeTrailingComment` |
 | Groß/Klein | `keywordCasing`, `typeCasing`, `literalCasing` (TRUE, 16#FF, T#, INT#), `timeUnitCasing` (Preserve/Upper/Lower) |
-| Deklarationen | `alignDeclarationColons`, `alignDeclarationInitializers`, `declarationCommentAlignment`, `blankLineBreaksAlignment`, `maxAlignedNameLength`, `alignEnumValues` |
+| Deklarationen | `declarationTypeColumn` (feste Typspalte, z. B. 37 = Tab 10), `alignDeclarationColons`, `alignDeclarationInitializers`, `declarationCommentAlignment`, `blankLineBreaksAlignment`, `maxAlignedNameLength`, `alignEnumValues` |
 | Anweisungen | `endKeywordSemicolon` (Preserve/Add/Remove), `codeCommentAlignment`, `alignConsecutiveAssignments`, `wrapLongCalls`, `wrapCallsWithArgumentsAtLeast`, `callWrapStyle`, `wrappedCallClosingParenthesisOnNewLine`, `alignWrappedArguments`, `rejoinWrappedCalls` |
 
 ### Namensprüfung (`naming`)
@@ -102,14 +102,48 @@ Gesucht wird in dieser Reihenfolge, wie bei Black:
 | TCN001 | Objektpräfix | `FB_`, `F_`, `P_` (MAIN ausgenommen), `I_`, `ST_`, `E_`, `U_`, `T_`, `GVL_` |
 | TCN002 | Variablenpräfix nach Datentyp (+ optional Bereich/Konstante) | `b` BOOL, `n`/`i` Ganzzahlen, `f` REAL, `s` STRING, `ws` WSTRING, `t` TIME, `d` DATE, `dt` DT, `tod` TOD, `a` ARRAY, `p` POINTER, `ref` REFERENCE, `fb` FBs (TON, R_TRIG, FB_*, MC_*), `st` ST_*, `e` E_*, `i`/`ip` I_*, `c` Konstanten |
 | TCN003 | Methoden, Properties, Aktionen | PascalCase ohne Präfix/Unterstrich |
-| TCN004 | Enum-Werte | beginnen mit Großbuchstaben |
-| TCN005 | ungültige Bezeichner | `__`, führender `_`, Nicht-ASCII |
+| TCN004 | Enum-Werte | `enumValueCase`: PascalCase (Standard), UpperCase oder Any |
+| TCN005 | ungültige Bezeichner | `__`, führender `_` (erlaubbar mit `allowLeadingUnderscore`), Nicht-ASCII |
 
 Weitere Einstellungen:
 - Arrays und Pointer können zusätzlich das Präfix des Elementtyps verlangen (`abFlags`, `pnValue`).
+- Präfixe pro Variablenbereich (`scopePrefixes`, z. B. `vi_`/`vo_`/`vio_`).
+- Konstanten können in GROSSBUCHSTABEN verlangt werden (`constantNameCase`).
+- Lokale Variablen von Methoden können eine Markierung verlangen (`methodLocalMarker`: `lr_TempAngle`).
 - Unbekannte Typen werden nicht geprüft.
+- Ein Standardeintrag einer Tabelle wird mit `null` entfernt, z. B. `"typePrefixes": { "I_*": null }`.
 - Ausnahmen gibt es per Regex (`ignoreNames`) oder per Kommentar `// tcfmt: ignore-naming` in der Zeile.
 - Der Schweregrad ist pro Regel einstellbar (Off/Info/Warning/Error).
+
+### Vorlage für die Firmenrichtlinie
+
+[presets/company-guideline.tcformat.json](presets/company-guideline.tcformat.json) bildet
+[plc-coding-guidelines.md](plc-coding-guidelines.md) ab. Enthalten sind:
+- Präfixe `b_`/`lr_`/`str_`…, `vi_`/`vo_`/`vio_`, `_FB_`/`_FC_`/`m_`/`act_`, `ton_`/`osr_`
+- `Temp` bei lokalen Variablen in Methoden
+- Konstanten und Enum-Werte in GROSSBUCHSTABEN
+- Typspalte auf Tab 10
+- F2-Stil bei Aufrufen
+- umbrochene IF-Bedingungen ohne Einrückung, Fortsetzungen unter `:=`
+- maximal 150 Zeichen pro Zeile, 2 Leerzeilen vor Abschnitten
+
+Zum Benutzen die Datei als `.tcformat.json` neben die `.sln` oder `.plcproj` kopieren.
+
+Nicht automatisch prüfbar sind:
+- Muster mit Maschinen- und Baugruppenteilen (`MODx_UNITx_…`)
+- Kommentarstil und Hilfe-Header
+- Verschachtelungstiefe und POU-Länge
+
+## Kompatibilität und Tests
+
+- **TwinCAT 3.1.4026 (TcXaeShell 64 bit):** installiert und getestet. Formatieren von Objekt, Ordner und Projekt, Namensprüfung mit Fehlerliste, danach „Check all objects“ ohne Fehler.
+- **TwinCAT 3.1.4024 (TcXaeShell 32 bit):** Die VSIX ist dafür gebaut (Manifestziel `[15.0,17.0) x86`, VS SDK 15.0, Typbibliothek 3.3). Auf dem Entwicklungsrechner war 4024 aber nicht installiert, daher ist sie dort **noch nicht live getestet**.
+- **Unit-Tests:** `dotnet test`, über 160 Tests, darunter Golden-Files aus dem Testprojekt. Jeder Formatter-Test prüft automatisch auch die Idempotenz.
+- **Integrationstest am Testprojekt** (`TestProject/`):
+  1. unordentlichen Code ins Projekt schreiben,
+  2. `TcFormatter.FormatAll` ausführen,
+  3. „Check all objects“ / Build muss 0 Fehler ergeben,
+  4. ein zweiter Lauf darf nichts mehr ändern.
 
 ## Entwicklung
 
