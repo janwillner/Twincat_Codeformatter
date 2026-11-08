@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace TcFormatter.Naming
 {
@@ -29,11 +30,14 @@ namespace TcFormatter.Naming
     /// </summary>
     public sealed class NamingRules
     {
+        [Category("1 General"), Description("Enable the naming check.")]
         public bool Enabled { get; set; } = true;
 
         /// <summary>Severity per rule id (see <see cref="NamingRuleIds"/>). Missing ids use <see cref="DefaultSeverity"/>.</summary>
+        [Category("1 General"), Description("Severity per rule: TCN001 object prefix, TCN002 variable prefix, TCN003 method/property name, TCN004 enum value, TCN005 invalid identifier. Values: Off, Info, Warning, Error.")]
         public Dictionary<string, NamingSeverity> Severities { get; set; } = new Dictionary<string, NamingSeverity>(StringComparer.OrdinalIgnoreCase);
 
+        [Category("1 General"), Description("Severity of rules without an entry in 'severities'.")]
         public NamingSeverity DefaultSeverity { get; set; } = NamingSeverity.Warning;
 
         /// <summary>
@@ -41,32 +45,42 @@ namespace TcFormatter.Naming
         /// Values may list alternatives separated by ',' (e.g. "n,i"). Exact keys win over wildcard keys;
         /// wildcard keys are tried in order of insertion.
         /// </summary>
+        [Category("2 Variables"), Description("Variable prefix per data type. '*' is a wildcard (e.g. FB_*), alternatives are separated by ',' (e.g. n,i). Unknown types are not checked.")]
         public Dictionary<string, string> TypePrefixes { get; set; } = DefaultTypePrefixes();
 
+        [Category("2 Variables"), Description("Prefix of ARRAY variables.")]
         public string ArrayPrefix { get; set; } = "a";
 
         /// <summary>When true, arrays need the element prefix too: ARRAY OF BOOL → "ab".</summary>
+        [Category("2 Variables"), Description("Arrays also need the element prefix (ARRAY OF BOOL -> ab).")]
         public bool ArrayIncludesElementPrefix { get; set; }
 
+        [Category("2 Variables"), Description("Prefix of POINTER variables.")]
         public string PointerPrefix { get; set; } = "p";
 
         /// <summary>When true, pointers need the target prefix too: POINTER TO INT → "pn".</summary>
+        [Category("2 Variables"), Description("Pointers also need the target prefix (POINTER TO INT -> pn).")]
         public bool PointerIncludesTargetPrefix { get; set; }
 
+        [Category("2 Variables"), Description("Prefix of REFERENCE variables.")]
         public string ReferencePrefix { get; set; } = "ref";
 
+        [Category("2 Variables"), Description("References also need the target prefix.")]
         public bool ReferenceIncludesTargetPrefix { get; set; }
 
         /// <summary>Additional accepted prefix for constants (VAR CONSTANT / VAR_GLOBAL CONSTANT). Empty = none.</summary>
+        [Category("2 Variables"), Description("Additional accepted prefix for constants (VAR CONSTANT). Empty = none.")]
         public string ConstantPrefix { get; set; } = "c";
 
         /// <summary>
         /// Prefix required before the type prefix per variable section, e.g. { "VAR_GLOBAL": "g" } → "gbStop".
         /// Keys: VAR, VAR_INPUT, VAR_OUTPUT, VAR_IN_OUT, VAR_GLOBAL, VAR_TEMP, VAR_STAT, VAR_INST, STRUCT.
         /// </summary>
+        [Category("2 Variables"), Description("Prefix required before the type prefix per section, e.g. VAR_GLOBAL: g -> gbStop. Keys: VAR, VAR_INPUT, VAR_OUTPUT, VAR_IN_OUT, VAR_GLOBAL, VAR_TEMP, VAR_STAT, VAR_INST, STRUCT.")]
         public Dictionary<string, string> ScopePrefixes { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Object name prefix per object kind. Empty string = no prefix required.</summary>
+        [Category("3 Objects"), Description("Name prefix per object kind (FUNCTION_BLOCK, FUNCTION, PROGRAM, INTERFACE, STRUCT, ENUM, UNION, ALIAS, GVL, METHOD, PROPERTY, ACTION). Empty = PascalCase without prefix.")]
         public Dictionary<string, string> ObjectPrefixes { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["FUNCTION_BLOCK"] = "FB_",
@@ -84,18 +98,23 @@ namespace TcFormatter.Naming
         };
 
         /// <summary>The first character after the prefix must be an upper case letter or digit (PascalCase).</summary>
+        [Category("3 Objects"), Description("The character after a prefix must be an upper case letter or digit.")]
         public bool RequirePascalCaseAfterPrefix { get; set; } = true;
 
         /// <summary>Methods, properties and actions: allow '_' inside the name.</summary>
+        [Category("3 Objects"), Description("Allow '_' in method, property and action names.")]
         public bool AllowUnderscoreInMemberNames { get; set; }
 
         /// <summary>Enum values must start with an upper case letter.</summary>
+        [Category("3 Objects"), Description("Enum values must start with an upper case letter.")]
         public bool EnumValuesPascalCase { get; set; } = true;
 
         /// <summary>Regular expressions of names that are never reported (variables and objects).</summary>
+        [Category("1 General"), Description("Regular expressions of names that are never reported.")]
         public List<string> IgnoreNames { get; set; } = new List<string> { "^MAIN$" };
 
         /// <summary>Variable sections that are checked.</summary>
+        [Category("1 General"), Description("Variable sections that are checked.")]
         public List<string> CheckedSections { get; set; } = new List<string>
         {
             "VAR", "VAR_INPUT", "VAR_OUTPUT", "VAR_IN_OUT", "VAR_GLOBAL", "VAR_TEMP", "VAR_STAT", "VAR_INST", "STRUCT",
