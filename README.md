@@ -151,41 +151,33 @@ Einstellungsdatei (`*.stweep`, *STweep → Settings → Export*) importieren:
 
 Einstellungen ohne Gegenstück meldet der Import einzeln, statt sie stillschweigend zu verwerfen. Es fehlen noch die
 Umbruchmodi für verkettete Ausdrücke und Methoden, CASE-Listen, FOR- und IF-Köpfe sowie die Klammerstile.
-[presets/stweep-import.tcformat.json](presets/stweep-import.tcformat.json) ist die umgewandelte Fassung von
-[presets/STSweepConfig.STweep](presets/STSweepConfig.STweep).
+Als Beispiel liegt ein STweep-Export unter [presets/STSweepConfig.STweep](presets/STSweepConfig.STweep).
 
 Zusätzlich werden die STweep-Direktiven `{STweep.Disable}` / `{STweep.Enable}` wie `tcfmt: off/on` beachtet.
 
-### Vorlage für die Firmenrichtlinie
+### Vorlage Syntegon
 
-[presets/company-guideline.tcformat.json](presets/company-guideline.tcformat.json) bildet
-[plc-coding-guidelines.md](plc-coding-guidelines.md) ab. Enthalten sind:
-- Präfixe `b_`/`lr_`/`str_`…, `vi_`/`vo_`/`vio_`, `_FB_`/`_FC_`/`m_`/`act_`, `ton_`/`osr_`
-- `Temp` bei lokalen Variablen in Methoden
-- Konstanten und Enum-Werte in GROSSBUCHSTABEN
-- Typspalte auf Tab 10
-- F2-Stil bei Aufrufen
-- umbrochene IF-Bedingungen ohne Einrückung, Fortsetzungen unter `:=`
-- maximal 150 Zeichen pro Zeile, 2 Leerzeilen vor Abschnitten
+[presets/Syntegon.tcformat.json](presets/Syntegon.tcformat.json) bildet
+[plc-coding-guidelines.md](plc-coding-guidelines.md) ab und ist am formatierten PACB-Code im `ReferenceProject`
+nachgemessen: 24 Bausteine mit Methoden und Aktionen, rund 13 000 Zeilen. Mit der Vorlage ändert der Formatter
+dort 7–9 % der Zeilen; das sind fast ausschließlich Stellen, an denen der Referenzcode in sich uneinheitlich ist
+(z. B. `: BOOL; 	//` neben `: BOOL; //`). Enthalten sind:
+- Tabs; Name bei Tab 1, `:` bei Tab 10 (Spalte 41), Typ ab Spalte 43, Kommentare ab Tab 13 (Spalte 53)
+- Kommentare vor `ELSIF`/`ELSE`/CASE-Labels auf Ebene des Zweigs, `SEQ.INIT :` aber `10:`
+- F2-Stil bei Aufrufen inkl. `vo_b_Busy=> ,`; Zeilenumbrüche in Aufrufen bleiben erhalten
+- umbrochene IF-Bedingungen ohne Einrückung, maximal 150 Zeichen pro Zeile
+- 2 Leerzeilen vor Abschnitten, Leerzeilen am Blockanfang/-ende bleiben stehen
+- Präfixe `b_`/`lr_`/`str_`…, `vi_`/`vo_`/`vio_`, `_FB_`/`_FC_`/`m_`/`act_`, `ton_`/`osr_`;
+  Referenzen ohne `ref_` (`vi_Cfg : REFERENCE TO TBRCH_Cfg`)
+- `Temp` bei lokalen Variablen in Methoden, Konstanten und Enum-Werte in GROSSBUCHSTABEN
 
-Zum Benutzen die Datei als `.tcformat.json` neben die `.sln` oder `.plcproj` kopieren.
+Zum Benutzen *Extras → TcFormatter → Import Settings...* wählen oder die Datei als `.tcformat.json` neben die
+`.sln` oder `.plcproj` kopieren.
 
 Nicht automatisch prüfbar sind:
 - Muster mit Maschinen- und Baugruppenteilen (`MODx_UNITx_…`)
 - Kommentarstil und Hilfe-Header
 - Verschachtelungstiefe und POU-Länge
-
-### Vorlage aus dem PACB-Referenzcode
-
-[presets/pacb.tcformat.json](presets/pacb.tcformat.json) ist aus dem formatierten PACB-Code im
-`ReferenceProject` abgeleitet und nachgemessen: 24 Bausteine mit Methoden und Aktionen, rund 13 000 Zeilen.
-Mit der Vorlage ändert der Formatter dort 7–9 % der Zeilen; das sind fast ausschließlich Stellen, an denen
-der Referenzcode in sich uneinheitlich ist (z. B. `: BOOL; 	//` neben `: BOOL; //`). Kernpunkte:
-- Tabs; Name bei Tab 1, `:` bei Tab 10 (Spalte 41), Typ ab Spalte 43, Kommentare ab Tab 13 (Spalte 53)
-- Kommentare vor `ELSIF`/`ELSE`/CASE-Labels auf Ebene des Zweigs, `SEQ.INIT :` aber `10:`
-- F2-Stil bei Aufrufen inkl. `vo_b_Busy=> ,`; Zeilenumbrüche in Aufrufen bleiben erhalten
-- 2 Leerzeilen vor Abschnitten, Leerzeilen am Blockanfang/-ende bleiben stehen
-- Namensregeln der Firmenrichtlinie; Referenzen ohne `ref_` (`vi_Cfg : REFERENCE TO TBRCH_Cfg`)
 
 ## Kompatibilität und Tests
 

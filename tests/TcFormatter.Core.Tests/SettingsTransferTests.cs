@@ -25,7 +25,7 @@ public class SettingsTransferTests : IDisposable
         var current = new TcFormatConfig();
         current.Naming.ArrayPrefix = "arr";
 
-        var imported = SettingsTransfer.Import(Preset("pacb.tcformat.json"), current, out var notes);
+        var imported = SettingsTransfer.Import(Preset("Syntegon.tcformat.json"), current, out var notes);
 
         Assert.Empty(notes);
         Assert.Equal(43, imported.Format.DeclarationTypeColumn);

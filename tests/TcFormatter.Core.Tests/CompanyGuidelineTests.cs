@@ -134,15 +134,15 @@ public class CompanyGuidelineTests : FormatterTestBase
     }
 
     [Fact]
-    public void The_shipped_preset_loads_and_accepts_guideline_code()
+    public void The_shipped_Syntegon_preset_loads_and_accepts_guideline_code()
     {
         string dir = AppContext.BaseDirectory;
         while (!File.Exists(Path.Combine(dir, "TcFormatter.sln")))
             dir = Path.GetDirectoryName(dir)!;
-        var config = Configuration.TcFormatConfig.Load(Path.Combine(dir, "presets", "company-guideline.tcformat.json"), out var warnings);
+        var config = Configuration.TcFormatConfig.Load(Path.Combine(dir, "presets", "Syntegon.tcformat.json"), out var warnings);
 
         Assert.Empty(warnings);
-        Assert.Equal(37, config.Format.DeclarationTypeColumn);
+        Assert.Equal(43, config.Format.DeclarationTypeColumn);
         Assert.False(config.Naming.TypePrefixes.ContainsKey("FB_*"));
 
         var fb = "FUNCTION_BLOCK _FB_X\nVAR_INPUT\n    vi_b_Init : BOOL;\n    vi_Data : TCamAnalyse_In;\nEND_VAR\nVAR\n    ton_Delay : TON;\n    fb_Brake : _FB_Brake;\nEND_VAR\nVAR CONSTANT\n    dn_MAX_LIGHT_CYCLES : DINT := 10;\nEND_VAR";
