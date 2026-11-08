@@ -18,11 +18,19 @@
     .\install.ps1 -Uninstall
 #>
 param(
-    [string] $Vsix = (Join-Path $PSScriptRoot 'src\TcFormatter.Vsix\bin\Release\net472\TcFormatter.Vsix.vsix'),
+    [string] $Vsix,
     [switch] $Uninstall
 )
 
 $ErrorActionPreference = 'Stop'
+
+# default: the VSIX next to this script (release zip), otherwise the local build output
+if (-not $Vsix) {
+    $Vsix = Join-Path $PSScriptRoot 'TcFormatter.vsix'
+    if (-not (Test-Path $Vsix)) {
+        $Vsix = Join-Path $PSScriptRoot 'src\TcFormatter.Vsix\bin\Release\net472\TcFormatter.Vsix.vsix'
+    }
+}
 
 # the elevated copy of this script starts in System32: pass an absolute path on
 if (-not [System.IO.Path]::IsPathRooted($Vsix)) {

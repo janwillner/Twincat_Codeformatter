@@ -11,6 +11,17 @@ Code-Formatter und Namensprüfung für **TwinCAT 3 Structured Text**, als Extens
 
 ## Installation (IDE)
 
+**Aus einem Release:** `TcFormatter-<version>.zip` von der
+[Releases-Seite](https://github.com/janwillner/Twincat_Codeformatter/releases) laden, entpacken, alle TcXaeShell schließen und
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1     # nimmt die TcFormatter.vsix daneben
+```
+
+Das Zip enthält außerdem `tcfmt\` (Kommandozeile, braucht die .NET 8 Runtime) und `presets\`.
+
+**Aus dem Quellcode:**
+
 ```powershell
 .\build.ps1          # Tests, CLI und VSIX bauen (braucht Visual Studio mit "Extension development")
 .\install.ps1        # alle TcXaeShell schließen; installiert in 4026 und/oder 4024 (fragt nach Admin-Rechten)
@@ -213,6 +224,20 @@ tests/                  xUnit-Tests inkl. Golden-Files aus dem TwinCAT-Testproje
 TestProject/            TwinCAT-Projekt zum Testen (formatiert, baut mit 0 Fehlern)
 lib/TCatSysManagerLib   Interop aus TypeLib 3.3 (eingebettet, kompatibel mit 4024 und 4026)
 ```
+
+### Build-Pipeline und Releases
+
+[.github/workflows/build.yml](.github/workflows/build.yml) läuft auf `windows-latest`. Bei jedem Push auf `main`
+und bei jedem Pull Request testet und baut sie alles und hängt das Zip als Workflow-Artefakt an.
+Ein Release entsteht durch einen Versions-Tag:
+
+```powershell
+git tag v1.1.0
+git push origin v1.1.0       # baut mit Version 1.1.0 und erstellt das GitHub-Release mit TcFormatter-1.1.0.zip
+```
+
+Tags mit Suffix (z. B. `v1.1.0-beta.1`) werden als Pre-Release veröffentlicht. Die Version wird in die Assemblies
+und in das VSIX-Manifest geschrieben (dort nur `1.1.0`, ohne Suffix). Lokal macht `.\build.ps1 -Version 1.1.0 -Package` dasselbe.
 
 Diagnose ohne modale Dialoge (z. B. über die TwinCAT-Automatisierung): `DTE.ExecuteCommand("TcFormatter.DiagnoseMenus", "options")`
 baut beide Optionsseiten unsichtbar auf, wählt jede Option einmal aus und schreibt

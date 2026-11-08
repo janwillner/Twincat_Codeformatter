@@ -1,0 +1,62 @@
+name: Build
+
+# Every push to main and every pull request: test + build, zip as workflow artifact.
+# A pushed tag v1.2.3 (or v1.2.3-beta.1): additionally a GitHub release with the zip attached.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # the VSIX needs the MSBuild of Visual Studio, which the Windows runner image ships
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          # tcfmt and the tests target net8.0
+          dotnet-version: 8.0.x
+
+      - name: Determine version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+              $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          } else {
+              $base = ([xml](Get-Content src\TcFormatter.Cli\TcFormatter.Cli.csproj)).Project.PropertyGroup.Version | Select-Object -First 1
+              $version = "$base-ci.$env:GITHUB_RUN_NUMBER"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+
+      - name: Build, test and package
+        shell: pwsh
+        run: .\build.ps1 -Version '${{ steps.version.outputs.version }}' -Package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TcFormatter-${{ steps.version.outputs.version }}
+          # the unpacked folder: GitHub zips artifacts itself, so this avoids a zip inside a zip
+          path: artifacts/package/
+
+      - name: Create GitHub release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $zip = "artifacts/TcFormatter-$env:VERSION.zip"
+          $flags = @('--generate-notes', '--title', "TcFormatter $env:VERSION")
+          if ($env:VERSION -match '-') { $flags += '--prerelease' }
+          gh release create $env:GITHUB_REF_NAME $zip @flags
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
