@@ -53,6 +53,14 @@ namespace TcFormatter.Vsix
             }
         }
 
+        /// <summary>Re-reads the option pages after the settings file was changed outside of Tools > Options.</summary>
+        internal void ReloadOptionPages()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            GetDialogPage(typeof(FormatOptionsPage)).LoadSettingsFromStorage();
+            GetDialogPage(typeof(NamingOptionsPage)).LoadSettingsFromStorage();
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)

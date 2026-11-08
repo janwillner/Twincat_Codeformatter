@@ -40,9 +40,9 @@ Im Menü **Extras → TcFormatter** steht nur, was es nicht per Rechtsklick gibt
 | Extras → TcFormatter | Wirkung |
 |---|---|
 | Format All PLC Projects / Check Naming of All PLC Projects | alle PLC-Projekte der Projektmappe |
-| Create / Open .tcformat.json for Solution | Projektkonfiguration neben der `.sln` anlegen und öffnen |
-| Import STweep Settings... | eine aus STweep exportierte `.stweep`-Datei als IDE-Einstellungen übernehmen |
 | Settings... | *Extras → Optionen → TcFormatter* |
+| Import Settings... | eine `.tcformat.json` (Formatierung und Namensregeln) oder einen STweep-Export (`.stweep`, nur Formatierung) als IDE-Einstellungen übernehmen |
+| Export Settings... | die IDE-Einstellungen als kommentierte `.tcformat.json` speichern, z. B. neben die `.sln`. Dann gilt sie für die ganze Projektmappe und alle, die sie auschecken. |
 
 Protokoll im Ausgabefenster unter **TcFormatter**. Alle Befehle lassen sich auch skripten, z. B.
 `DTE.ExecuteCommand("TcFormatter.FormatSelection", "TIPC^Plc1^Plc1 Project^POUs")`.
@@ -144,7 +144,8 @@ Weitere Einstellungen:
 TcFormatter kennt die öffentlich dokumentierten STweep-Einstellungen und kann eine aus STweep **exportierte**
 Einstellungsdatei (`*.stweep`, *STweep → Settings → Export*) importieren:
 
-- in TwinCAT: **Extras → TcFormatter → Import STweep Settings...**. Die Werte werden zu den IDE-Einstellungen;
+- in TwinCAT: **Extras → TcFormatter → Import Settings...** und die `.stweep`-Datei wählen. Die Werte werden zu den
+  IDE-Einstellungen, die Namensregeln bleiben erhalten;
   eine `.tcformat.json` im Projekt hat weiterhin Vorrang.
 - per Kommandozeile: `tcfmt import-stweep meine.stweep <Ordner>` schreibt dort eine `.tcformat.json`.
 

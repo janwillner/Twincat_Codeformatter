@@ -83,15 +83,7 @@
           <LocCanonicalName>.TcFormatter.CheckNamingAll</LocCanonicalName>
         </Strings>
       </Button>
-      <Button guid="guidTcFormatterCmdSet" id="cmdOpenConfig" priority="0x0100" type="Button">
-        <Parent guid="guidTcFormatterCmdSet" id="SettingsGroup" />
-        <Strings>
-          <ButtonText>Create / Open .tcformat.json for Solution</ButtonText>
-          <CanonicalName>.TcFormatter.OpenConfiguration</CanonicalName>
-          <LocCanonicalName>.TcFormatter.OpenConfiguration</LocCanonicalName>
-        </Strings>
-      </Button>
-      <Button guid="guidTcFormatterCmdSet" id="cmdOpenOptions" priority="0x0110" type="Button">
+      <Button guid="guidTcFormatterCmdSet" id="cmdOpenOptions" priority="0x0100" type="Button">
         <Parent guid="guidTcFormatterCmdSet" id="SettingsGroup" />
         <Strings>
           <ButtonText>Settings...</ButtonText>
@@ -99,13 +91,24 @@
           <LocCanonicalName>.TcFormatter.Settings</LocCanonicalName>
         </Strings>
       </Button>
-      <Button guid="guidTcFormatterCmdSet" id="cmdImportStweep" priority="0x0115" type="Button">
+      <!-- .tcformat.json or STweep export -> IDE settings; argument = file path -->
+      <Button guid="guidTcFormatterCmdSet" id="cmdImportSettings" priority="0x0110" type="Button">
         <Parent guid="guidTcFormatterCmdSet" id="SettingsGroup" />
         <CommandFlag>AllowParams</CommandFlag>
         <Strings>
-          <ButtonText>Import STweep Settings...</ButtonText>
-          <CanonicalName>.TcFormatter.ImportStweepSettings</CanonicalName>
-          <LocCanonicalName>.TcFormatter.ImportStweepSettings</LocCanonicalName>
+          <ButtonText>Import Settings...</ButtonText>
+          <CanonicalName>.TcFormatter.ImportSettings</CanonicalName>
+          <LocCanonicalName>.TcFormatter.ImportSettings</LocCanonicalName>
+        </Strings>
+      </Button>
+      <!-- IDE settings -> .tcformat.json (e.g. next to the .sln); argument = target path -->
+      <Button guid="guidTcFormatterCmdSet" id="cmdExportSettings" priority="0x0115" type="Button">
+        <Parent guid="guidTcFormatterCmdSet" id="SettingsGroup" />
+        <CommandFlag>AllowParams</CommandFlag>
+        <Strings>
+          <ButtonText>Export Settings...</ButtonText>
+          <CanonicalName>.TcFormatter.ExportSettings</CanonicalName>
+          <LocCanonicalName>.TcFormatter.ExportSettings</LocCanonicalName>
         </Strings>
       </Button>
       <!-- diagnostics only: available as DTE command / in the command window, not in a menu -->
@@ -161,10 +164,10 @@
       <IDSymbol name="cmdCheckSelection" value="0x0102" />
       <IDSymbol name="cmdFormatSolution" value="0x0103" />
       <IDSymbol name="cmdCheckSolution" value="0x0104" />
-      <IDSymbol name="cmdOpenConfig" value="0x0105" />
+      <IDSymbol name="cmdImportSettings" value="0x0105" />
       <IDSymbol name="cmdOpenOptions" value="0x0106" />
       <IDSymbol name="cmdDiagnoseMenus" value="0x0107" />
-      <IDSymbol name="cmdImportStweep" value="0x0108" />
+      <IDSymbol name="cmdExportSettings" value="0x0108" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

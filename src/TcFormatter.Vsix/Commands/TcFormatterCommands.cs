@@ -28,10 +28,10 @@ namespace TcFormatter.Vsix.Commands
         private const int CheckSelectionId = 0x0102;
         private const int FormatSolutionId = 0x0103;
         private const int CheckSolutionId = 0x0104;
-        private const int OpenConfigId = 0x0105;
+        private const int ImportSettingsId = 0x0105;
         private const int OpenOptionsId = 0x0106;
         private const int DiagnoseMenusId = 0x0107;
-        private const int ImportStweepId = 0x0108;
+        private const int ExportSettingsId = 0x0108;
 
         private readonly TcFormatterPackage _package;
         private readonly DTE2 _dte;
@@ -53,9 +53,9 @@ namespace TcFormatter.Vsix.Commands
             Add(service, FormatDocumentId, (arg, click) => RunActiveObject(click));
             Add(service, FormatSolutionId, (arg, click) => RunAll(format: true, lint: false));
             Add(service, CheckSolutionId, (arg, click) => RunAll(format: false, lint: true));
-            Add(service, OpenConfigId, (arg, click) => OpenConfiguration());
             Add(service, OpenOptionsId, (arg, click) => _package.ShowOptionPage(typeof(FormatOptionsPage)));
-            Add(service, ImportStweepId, (arg, click) => ImportStweep(arg));
+            Add(service, ImportSettingsId, (arg, click) => ImportSettings(arg));
+            Add(service, ExportSettingsId, (arg, click) => ExportSettings(arg));
             Add(service, DiagnoseMenusId, (arg, click) =>
             {
                 string file = Path.Combine(Path.GetTempPath(), "TcFormatter-menus.txt");
@@ -305,38 +305,29 @@ namespace TcFormatter.Vsix.Commands
             return config;
         }
 
-        private void OpenConfiguration()
+        /// <summary>Folder of the open solution, or null.</summary>
+        private string SolutionDirectory()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             string solution = _dte.Solution?.FullName;
-            if (string.IsNullOrEmpty(solution))
-            {
-                Report("Open a solution first. Without a solution the settings from Tools > Options > TcFormatter are used.");
-                return;
-            }
-            string file = Path.Combine(Path.GetDirectoryName(solution), TcFormatConfig.FileName);
-            if (!File.Exists(file))
-            {
-                // start from the current IDE settings
-                TcFormatConfig.LoadUser(out _).SaveTo(file);
-                _log.Write("Created " + file);
-            }
-            _dte.ItemOperations.OpenFile(file);
+            return string.IsNullOrEmpty(solution) ? null : Path.GetDirectoryName(solution);
         }
 
         /// <summary>
-        /// Converts a settings file exported from STweep into the IDE settings (%APPDATA%\TcFormatter\.tcformat.json).
-        /// The naming rules of the current settings are kept. Argument: path of the .stweep file (else a file dialog).
+        /// Imports a TcFormatter settings file (.tcformat.json, replaces format and naming) or a STweep export
+        /// (.stweep, format only) into the IDE settings (%APPDATA%\TcFormatter\.tcformat.json).
+        /// Argument: path of the file (else a file dialog).
         /// </summary>
-        private void ImportStweep(string file)
+        private void ImportSettings(string file)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             if (file == null)
             {
                 using (var dialog = new System.Windows.Forms.OpenFileDialog
                 {
-                    Title = "Import STweep settings",
-                    Filter = "STweep settings (*.stweep)|*.stweep|All files (*.*)|*.*",
+                    Title = "Import TcFormatter / STweep settings",
+                    Filter = SettingsTransfer.ImportFilter,
+                    InitialDirectory = SolutionDirectory() ?? string.Empty,
                 })
                 {
                     if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
@@ -349,24 +340,67 @@ namespace TcFormatter.Vsix.Commands
             List<string> notes;
             try
             {
-                imported = StweepImport.Convert(File.ReadAllText(file), out notes);
+                imported = SettingsTransfer.Import(file, TcFormatConfig.LoadUser(out _), out notes);
             }
-            catch (Exception ex) when (ex is ConfigException || ex is IOException)
+            catch (Exception ex) when (ex is ConfigException || ex is IOException || ex is UnauthorizedAccessException)
             {
-                Report("STweep import failed: " + ex.Message);
+                Report("Import failed: " + ex.Message);
                 return;
             }
 
-            var current = TcFormatConfig.LoadUser(out _);
-            current.Format = imported.Format;
-            current.SaveTo(TcFormatConfig.UserConfigFile);
+            SettingsTransfer.Export(imported, TcFormatConfig.UserConfigFile);
+            _package.ReloadOptionPages();
 
-            _log.Write($"Imported STweep settings from {file} into {TcFormatConfig.UserConfigFile}.");
+            string kind = SettingsTransfer.IsStweepFile(file) ? "STweep settings (format only, naming kept)" : "settings";
+            _log.Write($"Imported {kind} from {file} into {TcFormatConfig.UserConfigFile}.");
             foreach (var note in notes)
                 _log.Write("  NOTE " + note);
-            _log.Write("A .tcformat.json in the project still takes precedence over these IDE settings.");
+            string dir = SolutionDirectory();
+            if (dir != null && File.Exists(Path.Combine(dir, TcFormatConfig.FileName)))
+                _log.Write($"Note: {Path.Combine(dir, TcFormatConfig.FileName)} takes precedence over the IDE settings for this solution.");
             _log.Show();
-            _dte.StatusBar.Text = $"TcFormatter: STweep settings imported ({notes.Count} note(s), see Output window).";
+            _dte.StatusBar.Text = $"TcFormatter: settings imported ({notes.Count} note(s), see Output window).";
+        }
+
+        /// <summary>
+        /// Exports the IDE settings as a complete, commented .tcformat.json (e.g. next to the .sln, so that the
+        /// solution uses them for everyone). Argument: target path (else a file dialog in the solution folder).
+        /// </summary>
+        private void ExportSettings(string file)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (file == null)
+            {
+                using (var dialog = new System.Windows.Forms.SaveFileDialog
+                {
+                    Title = "Export TcFormatter settings",
+                    Filter = SettingsTransfer.ExportFilter,
+                    FileName = TcFormatConfig.FileName,
+                    InitialDirectory = SolutionDirectory() ?? string.Empty,
+                    OverwritePrompt = true,
+                })
+                {
+                    if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                        return;
+                    file = dialog.FileName;
+                }
+            }
+
+            try
+            {
+                SettingsTransfer.Export(TcFormatConfig.LoadUser(out _), file);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ConfigException)
+            {
+                Report("Export failed: " + ex.Message);
+                return;
+            }
+
+            _log.Write($"Exported the settings to {file}.");
+            if (string.Equals(Path.GetFileName(file), TcFormatConfig.FileName, StringComparison.OrdinalIgnoreCase))
+                _log.Write("TwinCAT objects in this folder and below are now formatted with this file (it takes precedence over the IDE settings).");
+            _log.Show();
+            _dte.StatusBar.Text = "TcFormatter: settings exported to " + file;
         }
 
         private void Report(string message)
