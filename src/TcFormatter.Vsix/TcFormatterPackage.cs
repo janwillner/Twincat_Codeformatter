@@ -70,6 +70,9 @@ namespace TcFormatter.Vsix
             }
         }
 
+        /// <summary>The Formatting options page object (diagnostics).</summary>
+        internal FormatOptionsPage FormatPage => (FormatOptionsPage)GetDialogPage(typeof(FormatOptionsPage));
+
         /// <summary>Re-reads the option pages after the settings file was changed outside of Tools > Options.</summary>
         internal void ReloadOptionPages()
         {

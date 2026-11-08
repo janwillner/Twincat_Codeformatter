@@ -15,6 +15,8 @@ namespace TcFormatter.Vsix.Options
         private readonly TextBox _before;
         private readonly TextBox _after;
         private readonly Label _title;
+        private readonly Label _source;
+        private readonly ToolTip _tip = new ToolTip();
         private readonly Func<string, OptionPreview> _preview;
 
         /// <param name="preview">Example of an option (property name) with the current values, or null when there is none.</param>
@@ -69,7 +71,19 @@ namespace TcFormatter.Vsix.Options
             };
             split.Panel1.Controls.Add(_grid);
             split.Panel2.Controls.Add(examples);
+
+            // which file is edited (project .tcformat.json of the open solution or the IDE settings)
+            _source = new Label
+            {
+                Dock = DockStyle.Top,
+                AutoSize = false,
+                AutoEllipsis = true,
+                Height = 22,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(2, 0, 2, 0),
+            };
             Controls.Add(split);
+            Controls.Add(_source); // added last = docked first, above the split container
 
             // the example area keeps ~40 % of the height when the page is resized for the first time
             bool sized = false;
@@ -80,6 +94,15 @@ namespace TcFormatter.Vsix.Options
                 sized = true;
                 split.SplitterDistance = (int)(split.Height * 0.58);
             };
+        }
+
+        /// <summary>Shows which settings file the page edits; <paramref name="error"/> highlights a file that cannot be read.</summary>
+        public void SetSource(string text, bool error)
+        {
+            _source.Text = text;
+            _source.ForeColor = error ? Color.DarkRed : SystemColors.ControlText;
+            _source.Font = new Font(Font, error ? FontStyle.Bold : FontStyle.Regular);
+            _tip.SetToolTip(_source, text);
         }
 
         /// <summary>Shows <paramref name="settings"/> in the grid (again after loading or resetting the settings).</summary>

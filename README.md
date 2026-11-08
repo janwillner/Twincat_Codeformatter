@@ -41,8 +41,8 @@ Im Menü **Extras → TcFormatter** steht nur, was es nicht per Rechtsklick gibt
 |---|---|
 | Format All PLC Projects / Check Naming of All PLC Projects | alle PLC-Projekte der Projektmappe |
 | Settings... | *Extras → Optionen → TcFormatter* |
-| Import Settings... | eine `.tcformat.json` (Formatierung und Namensregeln) oder einen STweep-Export (`.stweep`, nur Formatierung) als IDE-Einstellungen übernehmen |
-| Export Settings... | die IDE-Einstellungen als kommentierte `.tcformat.json` speichern, z. B. neben die `.sln`. Dann gilt sie für die ganze Projektmappe und alle, die sie auschecken. |
+| Import Settings... | eine `.tcformat.json` (Formatierung und Namensregeln) oder einen STweep-Export (`.stweep`, nur Formatierung) in die gerade gültigen Einstellungen übernehmen (Projektdatei der offenen Projektmappe, sonst IDE-Einstellungen) |
+| Export Settings... | die gerade gültigen Einstellungen als kommentierte `.tcformat.json` speichern, z. B. neben die `.sln`. Dann gilt sie für die ganze Projektmappe und alle, die sie auschecken. |
 
 Die Meldungen der Namensprüfung stehen in der Fehlerliste. Ein erneuter Check ersetzt sie, und **Clear** im
 Kontextmenü der Fehlerliste entfernt sie zusammen mit den TwinCAT-Meldungen.
@@ -77,8 +77,14 @@ Formatieren von Dateien mit der CLI die Projektmappe in XAE schließen.
 Gesucht wird in dieser Reihenfolge, wie bei Black:
 
 1. die nächstgelegene `.tcformat.json` vom Objekt (PLC-Projektordner) aus nach oben,
-2. die Benutzereinstellungen `%APPDATA%\TcFormatter\.tcformat.json` (*Extras → Optionen*),
+2. die Benutzereinstellungen `%APPDATA%\TcFormatter\.tcformat.json` (IDE-Einstellungen),
 3. die eingebauten Standardwerte.
+
+*Extras → Optionen → TcFormatter* bearbeitet immer die Datei, die gerade gilt: Ist eine Projektmappe offen, für die
+eine `.tcformat.json` gefunden wird (neben der `.sln` oder darüber), wird **diese Datei** gelesen und gespeichert;
+sonst die IDE-Einstellungen. Oben auf der Seite steht, welche Datei bearbeitet wird. *Import Settings...* und
+*Export Settings...* arbeiten mit derselben Datei. Beim Speichern wird die Datei vollständig mit allen Optionen und
+deren Beschreibungen neu geschrieben; eigene Kommentare darin gehen dabei verloren.
 
 **Vorher/Nachher-Beispiele:** Unter *Extras → Optionen → TcFormatter → Formatting* bzw. *Naming* zeigt
 jede Seite unter der Eigenschaftsliste ein kleines Codebeispiel zur ausgewählten Option. *Before* ist der
@@ -151,9 +157,8 @@ Weitere Einstellungen:
 TcFormatter kennt die öffentlich dokumentierten STweep-Einstellungen und kann eine aus STweep **exportierte**
 Einstellungsdatei (`*.stweep`, *STweep → Settings → Export*) importieren:
 
-- in TwinCAT: **Extras → TcFormatter → Import Settings...** und die `.stweep`-Datei wählen. Die Werte werden zu den
-  IDE-Einstellungen, die Namensregeln bleiben erhalten;
-  eine `.tcformat.json` im Projekt hat weiterhin Vorrang.
+- in TwinCAT: **Extras → TcFormatter → Import Settings...** und die `.stweep`-Datei wählen. Die Werte landen in den
+  gerade gültigen Einstellungen (siehe *Konfiguration*), die Namensregeln bleiben erhalten.
 - per Kommandozeile: `tcfmt import-stweep meine.stweep <Ordner>` schreibt dort eine `.tcformat.json`.
 
 Einstellungen ohne Gegenstück meldet der Import einzeln, statt sie stillschweigend zu verwerfen. Es fehlen noch die
@@ -212,4 +217,5 @@ Diagnose ohne modale Dialoge (z. B. über die TwinCAT-Automatisierung): `DTE.Exe
 baut beide Optionsseiten unsichtbar auf, wählt jede Option einmal aus und schreibt
 `%TEMP%\TcFormatter-options.txt` sowie Screenshots `%TEMP%\TcFormatter-options-*.png`.
 `"select:<Pfad>|format"` simuliert einen Rechtsklick auf einen Knoten des Projektmappen-Explorers.
+`"settingsfile"` meldet, welche Datei *Extras → Optionen* bearbeitet.
 `"errorlist:run:OtherContextMenus.ErrorList.Clear"` führt „Clear“ der Fehlerliste aus und meldet danach die Zahl der Naming-Einträge.

@@ -11,13 +11,17 @@ using TcFormatter.Naming;
 
 namespace TcFormatter.Vsix.Options
 {
-    /// <summary>Tools > Options > TcFormatter > Naming.</summary>
+    /// <summary>
+    /// Tools > Options > TcFormatter > Naming. Edits the same file as the Formatting page
+    /// (see <see cref="SettingsTarget"/>).
+    /// </summary>
     [ComVisible(true)]
     [Guid("6a7b8c9d-0e1f-4a2b-9c3d-4e5f6a7b8c9d")]
     public sealed class NamingOptionsPage : DialogPage
     {
         private NamingRulesView _view = new NamingRulesView(new NamingRules());
         private OptionPreviewControl _control;
+        private readonly LoadedSettings _loaded = new LoadedSettings();
 
         public override object AutomationObject => _view;
 
@@ -28,7 +32,7 @@ namespace TcFormatter.Vsix.Options
                 if (_control == null)
                 {
                     _control = new OptionPreviewControl(option => NamingOptionExamples.Preview(option, _view.Rules));
-                    _control.Bind(_view);
+                    Show();
                 }
                 return _control;
             }
@@ -37,25 +41,29 @@ namespace TcFormatter.Vsix.Options
         protected override void OnActivate(CancelEventArgs e)
         {
             base.OnActivate(e);
-            _control?.Bind(_view);
+            if (_loaded.IsOutdated())
+                LoadSettingsFromStorage();
+            else
+                Show();
         }
 
         public override void LoadSettingsFromStorage()
         {
-            _view = new NamingRulesView(TcFormatConfig.LoadUser(out _).Naming);
-            _control?.Bind(_view);
+            _view = new NamingRulesView(_loaded.Load(config => config.Naming) ?? new NamingRules());
+            Show();
         }
 
-        public override void SaveSettingsToStorage()
-        {
-            var config = TcFormatConfig.LoadUser(out _);
-            config.Naming = _view.Rules;
-            config.SaveTo(TcFormatConfig.UserConfigFile);
-        }
+        public override void SaveSettingsToStorage() => _loaded.Save(config => config.Naming = _view.Rules);
 
         public override void ResetSettings()
         {
             _view = new NamingRulesView(new NamingRules());
+            Show();
+        }
+
+        private void Show()
+        {
+            _control?.SetSource(_loaded.Caption, _loaded.Error != null);
             _control?.Bind(_view);
         }
     }

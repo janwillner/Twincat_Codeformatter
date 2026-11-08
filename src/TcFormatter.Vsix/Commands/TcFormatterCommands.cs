@@ -71,6 +71,24 @@ namespace TcFormatter.Vsix.Commands
                     _log.Write(report);
                     return;
                 }
+                if (arg != null && arg.StartsWith("settingsfile", StringComparison.OrdinalIgnoreCase))
+                {
+                    // which file Tools > Options edits; ":roundtrip" changes IndentSize through the real page and saves
+                    var target = Options.SettingsTarget.Resolve();
+                    string report = "target: " + target.Caption + "\n";
+                    if (arg.EndsWith(":roundtrip", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var page = _package.FormatPage;
+                        page.LoadSettingsFromStorage();
+                        var options = (Formatting.FormatterOptions)page.AutomationObject;
+                        options.IndentSize = options.IndentSize == 3 ? 5 : 3;
+                        page.SaveSettingsToStorage();
+                        report += $"set IndentSize = {options.IndentSize}, file now has {target.Load().Format.IndentSize}\n";
+                    }
+                    File.WriteAllText(file, report);
+                    _log.Write(report);
+                    return;
+                }
                 if (arg != null && arg.StartsWith("errorlist", StringComparison.OrdinalIgnoreCase))
                 {
                     // "errorlist:run:<command>" first executes that command with the Error List active (like a click);
@@ -337,7 +355,8 @@ namespace TcFormatter.Vsix.Commands
 
         /// <summary>
         /// Imports a TcFormatter settings file (.tcformat.json, replaces format and naming) or a STweep export
-        /// (.stweep, format only) into the IDE settings (%APPDATA%\TcFormatter\.tcformat.json).
+        /// (.stweep, format only) into the settings Tools > Options edits: the .tcformat.json of the open
+        /// solution, else the IDE settings (%APPDATA%\TcFormatter\.tcformat.json).
         /// Argument: path of the file (else a file dialog).
         /// </summary>
         private void ImportSettings(string file)
@@ -358,28 +377,26 @@ namespace TcFormatter.Vsix.Commands
                 }
             }
 
+            // the same file Tools > Options edits: the solution's .tcformat.json, else the IDE settings
+            var target = Options.SettingsTarget.Resolve();
             TcFormatConfig imported;
             List<string> notes;
             try
             {
-                imported = SettingsTransfer.Import(file, TcFormatConfig.LoadUser(out _), out notes);
+                imported = SettingsTransfer.Import(file, target.Load(), out notes);
+                SettingsTransfer.Export(imported, target.File);
             }
             catch (Exception ex) when (ex is ConfigException || ex is IOException || ex is UnauthorizedAccessException)
             {
                 Report("Import failed: " + ex.Message);
                 return;
             }
-
-            SettingsTransfer.Export(imported, TcFormatConfig.UserConfigFile);
             _package.ReloadOptionPages();
 
             string kind = SettingsTransfer.IsStweepFile(file) ? "STweep settings (format only, naming kept)" : "settings";
-            _log.Write($"Imported {kind} from {file} into {TcFormatConfig.UserConfigFile}.");
+            _log.Write($"Imported {kind} from {file} into the {target.Caption}");
             foreach (var note in notes)
                 _log.Write("  NOTE " + note);
-            string dir = SolutionDirectory();
-            if (dir != null && File.Exists(Path.Combine(dir, TcFormatConfig.FileName)))
-                _log.Write($"Note: {Path.Combine(dir, TcFormatConfig.FileName)} takes precedence over the IDE settings for this solution.");
             _log.Show();
             _dte.StatusBar.Text = $"TcFormatter: settings imported ({notes.Count} note(s), see Output window).";
         }
@@ -408,9 +425,10 @@ namespace TcFormatter.Vsix.Commands
                 }
             }
 
+            var source = Options.SettingsTarget.Resolve();
             try
             {
-                SettingsTransfer.Export(TcFormatConfig.LoadUser(out _), file);
+                SettingsTransfer.Export(source.Load(), file);
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ConfigException)
             {
@@ -418,7 +436,7 @@ namespace TcFormatter.Vsix.Commands
                 return;
             }
 
-            _log.Write($"Exported the settings to {file}.");
+            _log.Write($"Exported the {source.Caption} to {file}.");
             if (string.Equals(Path.GetFileName(file), TcFormatConfig.FileName, StringComparison.OrdinalIgnoreCase))
                 _log.Write("TwinCAT objects in this folder and below are now formatted with this file (it takes precedence over the IDE settings).");
             _log.Show();
