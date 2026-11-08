@@ -6,7 +6,7 @@
     <Method Name="M_Start" Id="{46ed1309-6ee5-4a37-9839-e7ceecc70927}">
       <Declaration><![CDATA[METHOD M_Start : BOOL
 VAR_INPUT
-fSpeed:LREAL;
+	fSpeed : LREAL;
 END_VAR]]></Declaration>
     </Method>
     <Property Name="P_State" Id="{1b52d863-ac8a-4690-b53b-de27d0ef148b}">

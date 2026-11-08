@@ -1,0 +1,90 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_Motor" Id="{19d8b361-f0f8-49f5-97d9-5640a56b36d4}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'reflection'}
+FUNCTION_BLOCK FB_Motor IMPLEMENTS I_Motor
+VAR_INPUT
+bEnable:BOOL; // enable motor
+    fSpeedSetpoint:LREAL:=0;
+bReset : BOOL;
+END_VAR
+VAR_OUTPUT
+bRunning:BOOL;bError:BOOL;
+nErrorId : UDINT;
+END_VAR
+VAR
+fbStartDelay:TON;
+fbResetTrigger : R_TRIG;
+eState:E_MotorState:=E_MotorState.Idle;
+stData : ST_MotorData;
+pData:POINTER TO ST_MotorData;
+aHistory:ARRAY[0..9] OF LREAL;
+i:INT;
+Speed : LREAL;
+END_VAR
+VAR CONSTANT
+cStartDelay:TIME:=T#500MS;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fbResetTrigger(CLK:=bReset);
+IF fbResetTrigger.Q THEN eState:=E_MotorState.Idle; bError:=FALSE; nErrorId:=0; END_IF
+
+case eState of
+E_MotorState.Idle:
+bRunning:=false;
+IF bEnable AND NOT bError THEN eState:=E_MotorState.Starting; END_IF
+E_MotorState.Starting: fbStartDelay(IN:=TRUE,PT:=cStartDelay);
+    IF fbStartDelay.Q THEN
+fbStartDelay(IN:=FALSE);
+eState:=E_MotorState.Running;
+END_IF
+E_MotorState.Running:
+bRunning:=TRUE;
+Speed:=F_Scale(fIn:=fSpeedSetpoint,fInMin:=0,fInMax:=100,fOutMin:=0,fOutMax:=3000);
+// shift history
+FOR i:=9 TO 1 BY -1 DO aHistory[i]:=aHistory[i-1]; END_FOR
+aHistory[0]:=Speed;
+IF NOT bEnable THEN eState:=E_MotorState.Idle; END_IF
+E_MotorState.Error:
+bRunning:=FALSE;
+ELSE
+eState:=E_MotorState.Error;nErrorId:=16#DEAD;
+END_CASE
+
+pData:=ADR(stData);
+pData^.fSpeedSetpoint:=Speed;
+pData^.eState:=eState;]]></ST>
+    </Implementation>
+    <Action Name="A_Reset" Id="{2e68151e-6fd5-4e6d-9823-4c951fa57cce}">
+      <Implementation>
+        <ST><![CDATA[eState:=E_MotorState.Idle;bError:=FALSE;nErrorId:=0;
+    MEMSET(ADR(aHistory),0,SIZEOF(aHistory));]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Start" Id="{2f225c7f-0076-4775-908d-5e326a652b08}">
+      <Declaration><![CDATA[METHOD M_Start : BOOL
+VAR_INPUT
+fSpeed:LREAL;
+END_VAR
+VAR
+bOk:BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bOk:=fSpeed>0 AND fSpeed<=3000;
+IF bOk THEN fSpeedSetpoint:=fSpeed; bEnable:=TRUE; END_IF
+M_Start:=bOk;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_State" Id="{3a6baae2-7ed2-4c04-902d-9e4fd39b39aa}">
+      <Declaration><![CDATA[PROPERTY PUBLIC P_State : E_MotorState]]></Declaration>
+      <Get Name="Get" Id="{9341fe7d-c7a2-4e98-8caa-d0c812fa0287}">
+        <Declaration><![CDATA[PUBLIC
+VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_State:=eState;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+  </POU>
+</TcPlcObject>

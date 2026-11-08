@@ -3,52 +3,54 @@
   <POU Name="MAIN" Id="{5f21d9f0-476f-4bd8-8418-2d4b7f0a1634}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
-fbMotor1:FB_Motor; fbMotor2 : FB_Motor;
-ipMotor:I_Motor;
-nIndex:INT;bStartAll:BOOL;
-fTotal : LREAL;
-nLoops:UDINT;
-sText:STRING:='Hello $'world$'';
-wsText : WSTRING:="wide";
-tElapsed:TIME:=t#1s500ms;
-dtStart : DT:=DT#2024-01-01-12:00:00;
-bInput AT %I* : BOOL;
-bOutput AT %Q*:BOOL;
+	fbMotor1       : FB_Motor;
+	fbMotor2       : FB_Motor;
+	ipMotor        : I_Motor;
+	nIndex         : INT;
+	bStartAll      : BOOL;
+	fTotal         : LREAL;
+	nLoops         : UDINT;
+	sText          : STRING  := 'Hello $'world$'';
+	wsText         : WSTRING := "wide";
+	tElapsed       : TIME    := T#1s500ms;
+	dtStart        : DT      := DT#2024-01-01-12:00:00;
+	bInput AT %I*  : BOOL;
+	bOutput AT %Q* : BOOL;
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[// main cycle
-GVL_Main.nCycleCount:=GVL_Main.nCycleCount+1;
+GVL_Main.nCycleCount := GVL_Main.nCycleCount + 1;
 
 {region "Motors"}
-fbMotor1(bEnable:=bStartAll AND NOT GVL_Main.bEmergencyStop,fSpeedSetpoint:=50.0,bReset:=FALSE);
-fbMotor2(
-bEnable:=bStartAll,
-fSpeedSetpoint:=75.0,
-bReset:=FALSE
-);
-ipMotor:=fbMotor1;
-IF ipMotor.P_State=E_MotorState.Running THEN fTotal:=fTotal+1; END_IF
+fbMotor1(bEnable := bStartAll AND NOT GVL_Main.bEmergencyStop, fSpeedSetpoint := 50.0, bReset := FALSE);
+fbMotor2(bEnable := bStartAll, fSpeedSetpoint := 75.0, bReset := FALSE);
+ipMotor := fbMotor1;
+IF ipMotor.P_State = E_MotorState.Running THEN
+	fTotal := fTotal + 1;
+END_IF
 {endregion}
 
-nLoops:=0;
-WHILE nLoops<10 DO nLoops:=nLoops+1; END_WHILE
+nLoops := 0;
+WHILE nLoops < 10 DO
+	nLoops := nLoops + 1;
+END_WHILE
 REPEAT
-nIndex:=nIndex+1;
-UNTIL nIndex>=GVL_Main.cMaxMotors
+	nIndex := nIndex + 1;
+UNTIL nIndex >= GVL_Main.cMaxMotors
 END_REPEAT
-FOR nIndex:=1 TO GVL_Main.cMaxMotors DO
-GVL_Main.aMotors[nIndex].bEnabled:=bStartAll; // copy
-    GVL_Main.aMotors[nIndex].fSpeedSetpoint:=-1*GVL_Main.aMotors[nIndex].fSpeedSetpoint;
+FOR nIndex := 1 TO GVL_Main.cMaxMotors DO
+	GVL_Main.aMotors[nIndex].bEnabled := bStartAll; // copy
+	GVL_Main.aMotors[nIndex].fSpeedSetpoint := -1 * GVL_Main.aMotors[nIndex].fSpeedSetpoint;
 END_FOR
-bOutput:=bInput XOR bStartAll;
+bOutput := bInput XOR bStartAll;
 (* multi
    line comment *)
-IF fTotal>1000 THEN
-fTotal:=0;
-ELSIF fTotal>500 THEN
-fTotal:=fTotal-1;
+IF fTotal > 1000 THEN
+	fTotal := 0;
+ELSIF fTotal > 500 THEN
+	fTotal := fTotal - 1;
 ELSE
-;
+	;
 END_IF]]></ST>
     </Implementation>
   </POU>

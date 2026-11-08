@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="F_Scale" Id="{1dc1d090-b17a-43bd-9eff-da9d58a4350b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_Scale : LREAL
+VAR_INPUT
+fIn:LREAL; fInMin : LREAL:=0; fInMax:LREAL:=100;
+fOutMin:LREAL;fOutMax:LREAL:=1.0;
+END_VAR
+VAR
+fRange:LREAL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fRange:=fInMax-fInMin;
+IF fRange=0 THEN F_Scale:=fOutMin; RETURN; END_IF
+F_Scale:=(fIn-fInMin)/fRange*(fOutMax-fOutMin)+fOutMin;]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

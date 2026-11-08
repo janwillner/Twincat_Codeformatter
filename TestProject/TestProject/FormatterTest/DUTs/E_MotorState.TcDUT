@@ -5,10 +5,10 @@
 {attribute 'strict'}
 TYPE E_MotorState :
 (
-Idle:=0, // waiting
-    Starting  :=   10,
-Running:=20,
-  Error:=99
+	Idle     := 0,  // waiting
+	Starting := 10,
+	Running  := 20,
+	Error    := 99
 );
 END_TYPE]]></Declaration>
   </DUT>

@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="T_MotorName" Id="{f31eddd5-f155-472f-bbd3-fa1b1a381526}">
+    <Declaration><![CDATA[TYPE T_MotorName : STRING(40);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <Itf Name="I_Motor" Id="{46ff3029-b598-47d7-91a3-580cfc33a5b0}">
+    <Declaration><![CDATA[INTERFACE I_Motor
+]]></Declaration>
+    <Method Name="M_Start" Id="{46ed1309-6ee5-4a37-9839-e7ceecc70927}">
+      <Declaration><![CDATA[METHOD M_Start : BOOL
+VAR_INPUT
+	fSpeed : LREAL;
+END_VAR]]></Declaration>
+    </Method>
+    <Property Name="P_State" Id="{1b52d863-ac8a-4690-b53b-de27d0ef148b}">
+      <Declaration><![CDATA[PROPERTY P_State : E_MotorState]]></Declaration>
+      <Get Name="Get" Id="{eff680a6-b354-44ae-8072-e9d624e8289b}">
+        <Declaration><![CDATA[PUBLIC
+VAR
+END_VAR]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>
