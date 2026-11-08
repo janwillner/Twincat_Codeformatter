@@ -30,7 +30,7 @@ namespace TcFormatter.Vsix.TwinCat
             608, 609, 610,           // action, method, interface method
             611, 612, 613, 614,      // property, interface property, get, set
             615, 616, 618, 629,      // GVL, transition, interface, parameter list
-            654, 655,                // interface property get / set
+            // 654 / 655 (interface property get / set) carry no code
         };
 
         /// <summary>Nodes that never contain user code and can be large (instances, libraries, tasks, visualisations, ...).</summary>
@@ -369,17 +369,21 @@ namespace TcFormatter.Vsix.TwinCat
             }
         }
 
-        public static bool IsStructuredText(ITcPlcImplementation implementation)
+        /// <summary>Object types with a declaration area (see InfoSys "Reading and setting the declaration and implementation of a POU").</summary>
+        private static readonly HashSet<int> WithDeclaration = new HashSet<int>
         {
-            try
-            {
-                return implementation.Language == IECLANGUAGETYPES.IECLANGUAGE_ST;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+            602, 603, 604, 605, 606, 607, 623, 609, 610, 611, 612, 613, 614, 615, 618, 629,
+        };
+
+        /// <summary>Object types with an implementation area.</summary>
+        private static readonly HashSet<int> WithImplementation = new HashSet<int>
+        {
+            602, 603, 604, 608, 609, 613, 614, 616,
+        };
+
+        public static bool HasDeclarationPart(int itemType) => WithDeclaration.Contains(itemType);
+
+        public static bool HasImplementationPart(int itemType) => WithImplementation.Contains(itemType);
 
         public static string Describe(IEnumerable<ITcSmTreeItem> items) =>
             string.Join(", ", items.Select(i =>

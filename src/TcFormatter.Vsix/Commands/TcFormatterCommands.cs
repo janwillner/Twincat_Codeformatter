@@ -4,6 +4,7 @@ using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Windows.Threading;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
 using TcFormatter.Configuration;
@@ -60,19 +61,28 @@ namespace TcFormatter.Vsix.Commands
             {
                 ThreadHelper.ThrowIfNotOnUIThread();
                 string argument = (e as OleMenuCmdEventArgs)?.InValue as string;
-                try
+                argument = string.IsNullOrWhiteSpace(argument) ? null : argument.Trim().Trim('"');
+
+                // Run from the UI message loop instead of inside the command invocation: when the command is
+                // executed through DTE.ExecuteCommand by another process, the call arrives as an incoming COM
+                // call and the PLC engine refuses nested calls (SEHException). Also closes the menu immediately.
+                Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
                 {
-                    handler(string.IsNullOrWhiteSpace(argument) ? null : argument.Trim().Trim('"'));
-                }
-                catch (Exception ex)
-                {
-                    _log.Write("Unexpected error: " + ex);
-                    _log.Show();
-                    VsShellUtilities.ShowMessageBox(_package, ex.Message, "TcFormatter",
-                        Microsoft.VisualStudio.Shell.Interop.OLEMSGICON.OLEMSGICON_CRITICAL,
-                        Microsoft.VisualStudio.Shell.Interop.OLEMSGBUTTON.OLEMSGBUTTON_OK,
-                        Microsoft.VisualStudio.Shell.Interop.OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);
-                }
+                    ThreadHelper.ThrowIfNotOnUIThread();
+                    try
+                    {
+                        handler(argument);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Write("Unexpected error: " + ex);
+                        _log.Show();
+                        VsShellUtilities.ShowMessageBox(_package, ex.Message, "TcFormatter",
+                            Microsoft.VisualStudio.Shell.Interop.OLEMSGICON.OLEMSGICON_CRITICAL,
+                            Microsoft.VisualStudio.Shell.Interop.OLEMSGBUTTON.OLEMSGBUTTON_OK,
+                            Microsoft.VisualStudio.Shell.Interop.OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);
+                    }
+                }));
             }, new CommandID(CommandSet, id));
             command.ParametersDescription = "$";
             service.AddCommand(command);
@@ -200,7 +210,7 @@ namespace TcFormatter.Vsix.Commands
                 : $"{summary.Naming.Count} naming issue(s) in {summary.Objects} object(s)";
             if (summary.Errors.Count > 0)
                 result += $", {summary.Errors.Count} error(s)";
-            result += $" ({watch.ElapsedMilliseconds} ms).";
+            result += $" ({watch.ElapsedMilliseconds} ms, access: {PlcText.LastAccessPath}).";
 
             _log.Write(result);
             statusBar.Text = "TcFormatter: " + result;

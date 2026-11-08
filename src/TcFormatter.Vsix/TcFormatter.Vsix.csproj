@@ -45,6 +45,8 @@
     <Reference Include="System.Design" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="Microsoft.CSharp" />
     <Reference Include="TCatSysManagerLib">
       <HintPath>..\..\lib\TCatSysManagerLib.dll</HintPath>
       <EmbedInteropTypes>true</EmbedInteropTypes>
@@ -66,17 +68,11 @@
   </ItemGroup>
 
   <!--
-    Embed the EnvDTE interop types instead of referencing the interop assemblies (works in VS 15, 16 and 17).
-    The 7.1-9.0 Shell.Interop assemblies cannot be embedded (no PIA attribute); VS 2022 type-forwards them
-    to Microsoft.VisualStudio.Interop, so the remaining VSIXCompatibility1001 warning for them is expected.
+    EnvDTE / EnvDTE80 / Shell.Interop are referenced, NOT embedded: in VS 2022 (TcXaeShell 4026) the DTE
+    objects are managed and embedded (type-equivalent) EnvDTE interfaces fail with InvalidCastException
+    ("DteProjects" to "EnvDTE.Projects"). VS 15, 16 and 17 all ship these assemblies, so the
+    VSIXCompatibility1001 warning of the VS SDK analyzer is expected and harmless.
   -->
-  <Target Name="TcFormatterEmbedInteropTypes" AfterTargets="ResolveAssemblyReferences">
-    <ItemGroup>
-      <ReferencePath Condition="'%(FileName)' == 'EnvDTE' or '%(FileName)' == 'EnvDTE80'">
-        <EmbedInteropTypes>true</EmbedInteropTypes>
-      </ReferencePath>
-    </ItemGroup>
-  </Target>
 
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" Condition="Exists('$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets')" />

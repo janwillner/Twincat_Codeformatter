@@ -62,7 +62,7 @@ foreach ($ide in $shells) {
     if (-not $Uninstall) {
         [System.IO.Compression.ZipFile]::ExtractToDirectory($Vsix, $target)
         # files that only belong to the VSIX container
-        Remove-Item (Join-Path $target '[Content_Types].xml') -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $target '[Content_Types].xml') -Force -ErrorAction SilentlyContinue
         Write-Host "Installed TcFormatter into $target"
     } else {
         Write-Host "Removed TcFormatter from $ide"

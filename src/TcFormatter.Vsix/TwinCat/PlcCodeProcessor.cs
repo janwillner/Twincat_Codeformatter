@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using TcFormatter.Configuration;
 using TcFormatter.Formatting;
 using TcFormatter.Naming;
@@ -31,49 +30,48 @@ namespace TcFormatter.Vsix.TwinCat
         public List<string> ChangedObjects { get; } = new List<string>();
     }
 
-    /// <summary>Formats and/or checks one PLC object through ITcPlcDeclaration / ITcPlcImplementation.</summary>
+    /// <summary>Formats and/or checks one PLC object (declaration and Structured Text implementation).</summary>
     internal static class PlcCodeProcessor
     {
         public static void Process(ITcSmTreeItem item, TcFormatConfig config, bool format, bool lint, ProcessSummary summary)
         {
-            string path;
-            string name;
-            int type;
+            string path = "?";
+            int type = -1;
             try
             {
                 path = item.PathName;
-                name = item.Name;
                 type = item.ItemType;
+                ProcessCore(item, path, type, config, format, lint, summary);
             }
-            catch (COMException ex)
+            catch (Exception ex)
             {
-                summary.Errors.Add("Cannot access tree item: " + ex.Message);
-                return;
+                // one broken object must never stop the whole run
+                summary.Errors.Add($"{path} (item type {type}): {ex.GetType().Name}: {ex.Message}");
             }
+        }
 
+        private static void ProcessCore(ITcSmTreeItem item, string path, int type, TcFormatConfig config, bool format, bool lint, ProcessSummary summary)
+        {
+            string name = item.Name;
             summary.Objects++;
             bool changed = false;
 
-            if (item is ITcPlcDeclaration declaration)
+            if (PlcTree.HasDeclarationPart(type))
             {
-                string text = Read(() => declaration.DeclarationText, path, "declaration", summary);
-                if (text != null)
+                string text = PlcText.Read(item, PlcText.Declaration);
+                if (format)
+                    text = FormatPart(item, text, CodePart.Declaration, PlcText.Declaration, config, path, summary, ref changed);
+                if (lint)
                 {
-                    if (format)
-                        text = FormatPart(text, CodePart.Declaration, config, path, summary, t => declaration.DeclarationText = t, ref changed);
-                    if (lint && text != null)
-                    {
-                        foreach (var d in NamingChecker.Check(text, config.Naming, name, PlcTree.KindForNaming(type)))
-                            summary.Naming.Add(new NamingIssue(path, "Declaration", d));
-                    }
+                    foreach (var d in NamingChecker.Check(text, config.Naming, name, PlcTree.KindForNaming(type)))
+                        summary.Naming.Add(new NamingIssue(path, "Declaration", d));
                 }
             }
 
-            if (item is ITcPlcImplementation implementation && PlcTree.IsStructuredText(implementation))
+            if (format && PlcTree.HasImplementationPart(type) && PlcText.IsStructuredText(item))
             {
-                string text = Read(() => implementation.ImplementationText, path, "implementation", summary);
-                if (text != null && format)
-                    FormatPart(text, CodePart.Implementation, config, path, summary, t => implementation.ImplementationText = t, ref changed);
+                string text = PlcText.Read(item, PlcText.Implementation);
+                FormatPart(item, text, CodePart.Implementation, PlcText.Implementation, config, path, summary, ref changed);
             }
 
             if (lint && type == PlcTree.Action)
@@ -89,21 +87,8 @@ namespace TcFormatter.Vsix.TwinCat
             }
         }
 
-        private static string Read(Func<string> read, string path, string what, ProcessSummary summary)
-        {
-            try
-            {
-                return read() ?? string.Empty;
-            }
-            catch (COMException ex)
-            {
-                summary.Errors.Add($"{path}: cannot read {what}: {ex.Message}");
-                return null;
-            }
-        }
-
-        private static string FormatPart(string text, CodePart part, TcFormatConfig config, string path, ProcessSummary summary,
-                                         Action<string> write, ref bool changed)
+        private static string FormatPart(ITcSmTreeItem item, string text, CodePart part, string property, TcFormatConfig config,
+                                         string path, ProcessSummary summary, ref bool changed)
         {
             var result = StFormatter.Format(text, part, config.Format);
             if (result.Error != null)
@@ -113,17 +98,9 @@ namespace TcFormatter.Vsix.TwinCat
             }
             if (!result.Changed)
                 return text;
-            try
-            {
-                write(result.Text);
-                changed = true;
-                return result.Text;
-            }
-            catch (COMException ex)
-            {
-                summary.Errors.Add($"{path} ({part}): cannot write (read-only?): {ex.Message}");
-                return text;
-            }
+            PlcText.Write(item, property, result.Text);
+            changed = true;
+            return result.Text;
         }
     }
 }
