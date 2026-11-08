@@ -137,8 +137,17 @@ namespace TcFormatter.Vsix.Options
         [Category("3 Objects"), DisplayName("Allow '_' in method/property/action names")]
         public bool AllowUnderscoreInMemberNames { get => Rules.AllowUnderscoreInMemberNames; set => Rules.AllowUnderscoreInMemberNames = value; }
 
-        [Category("3 Objects"), DisplayName("Enum values PascalCase")]
-        public bool EnumValuesPascalCase { get => Rules.EnumValuesPascalCase; set => Rules.EnumValuesPascalCase = value; }
+        [Category("3 Objects"), DisplayName("Enum value casing"), Description("Any, PascalCase or UpperCase (INIT, OPEN_GEAR).")]
+        public NameCase EnumValueCase { get => Rules.EnumValueCase; set => Rules.EnumValueCase = value; }
+
+        [Category("3 Objects"), DisplayName("Allow leading '_'"), Description("Allow names starting with '_' (e.g. object prefixes _FB_ / _FC_).")]
+        public bool AllowLeadingUnderscore { get => Rules.AllowLeadingUnderscore; set => Rules.AllowLeadingUnderscore = value; }
+
+        [Category("2 Variables"), DisplayName("Constant name casing"), Description("Any, PascalCase or UpperCase after the prefix (dn_MAX_LIGHT_CYCLES).")]
+        public NameCase ConstantNameCase { get => Rules.ConstantNameCase; set => Rules.ConstantNameCase = value; }
+
+        [Category("2 Variables"), DisplayName("Method local marker"), Description("Text required after the type prefix of method locals, e.g. 'Temp' -> lr_TempAngle. Empty = none.")]
+        public string MethodLocalMarker { get => Rules.MethodLocalMarker; set => Rules.MethodLocalMarker = value ?? string.Empty; }
 
         private static string Table(Dictionary<string, string> map) =>
             string.Join(Environment.NewLine, map.Select(p => p.Key + " = " + p.Value));

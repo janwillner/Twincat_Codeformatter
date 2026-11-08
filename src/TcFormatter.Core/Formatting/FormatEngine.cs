@@ -16,23 +16,24 @@ namespace TcFormatter.Formatting
         private static readonly Regex FormatOff = new Regex(@"tcfmt\s*:\s*off\b", RegexOptions.IgnoreCase);
         private static readonly Regex FormatOn = new Regex(@"tcfmt\s*:\s*on\b", RegexOptions.IgnoreCase);
 
-        private static readonly HashSet<string> VarModifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "CONSTANT", "RETAIN", "PERSISTENT",
-        };
-
-        private static readonly HashSet<string> EndKeywordsWithOptionalSemicolon = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "END_IF", "END_CASE", "END_FOR", "END_WHILE", "END_REPEAT",
-        };
-
         private readonly string _source;
         private readonly CodePart _part;
         private readonly FormatterOptions _o;
 
         private readonly List<Frame> _stack = new List<Frame>();
+        /// <summary>Open parentheses and brackets.</summary>
         private int _paren;
+
+        /// <summary>The current statement is not terminated yet (following lines are continuations).</summary>
         private bool _open;
+
+        /// <summary>The open statement is a condition (IF / ELSIF / WHILE / UNTIL) that has not reached THEN / DO yet.</summary>
+        private bool _conditionOpen;
+
+        /// <summary>Indentation level and first line of the statement that is currently open.</summary>
+        private int _statementLevel;
+        private Line _statementHead;
+
         private Token _prevSignificant;
         private int _frameIds;
 
@@ -46,6 +47,9 @@ namespace TcFormatter.Formatting
         internal HashSet<Token> UnaryOperators { get; } = new HashSet<Token>();
 
         internal HashSet<Token> CaseLabelColons { get; } = new HashSet<Token>();
+
+        /// <summary>':=' and '=>' inside parentheses (named call arguments, FB initialisation).</summary>
+        internal HashSet<Token> ArgumentAssignments { get; } = new HashSet<Token>();
 
         /// <summary>Tokens that were preceded by whitespace in the source (used for unknown characters).</summary>
         internal HashSet<Token> SpaceBefore { get; } = new HashSet<Token>();
@@ -65,7 +69,7 @@ namespace TcFormatter.Formatting
             for (int i = 0; i < lines.Count; i++)
                 ProcessLine(lines, i);
 
-            var renderer = new Renderer(_o, UnaryOperators, CaseLabelColons, SpaceBefore);
+            var renderer = new Renderer(_o, UnaryOperators, CaseLabelColons, ArgumentAssignments, SpaceBefore);
             var physical = renderer.Render(lines);
 
             var sb = new StringBuilder();
@@ -254,16 +258,23 @@ namespace TcFormatter.Formatting
             int level;
             if (continuation)
             {
+                // continuation lines are indented relative to the line that started the statement
                 int cont = Math.Max(0, _o.ContinuationIndent);
-                level = BodyLevel() + (_paren > 0 ? _paren * cont : cont);
+                if (_paren == 0 && _conditionOpen && !_o.IndentConditionContinuation)
+                    cont = 0;
+                level = _statementLevel + (_paren > 0 ? _paren * cont : cont);
                 if (_paren > 0 && first.Kind == TokenKind.Operator && (first.Text == ")" || first.Text == "]"))
                     level -= cont;
+                line.StatementHead = _statementHead;
+                line.ParenDepthAtStart = _paren;
             }
             else
             {
                 if (Top != null && Top.Kind == FrameKind.Case && Top.HeaderDone)
                     caseLabelColon = FindCaseLabelColon(line.Tokens);
                 level = LevelForStatementStart(first, caseLabelColon >= 0);
+                _statementLevel = Math.Max(0, level);
+                _statementHead = line;
             }
 
             line.Indent = Math.Max(0, level);
@@ -415,10 +426,16 @@ namespace TcFormatter.Formatting
                         case "]":
                             _paren = Math.Max(0, _paren - 1);
                             break;
+                        case ":=":
+                        case "=>":
+                            if (_paren > 0)
+                                ArgumentAssignments.Add(t);
+                            break;
                         case ";":
                             if (_paren == 0)
                             {
                                 _open = false;
+                                _conditionOpen = false;
                                 structural = true;
                                 if (_o.OneStatementPerLine)
                                     splitAfter = k;
@@ -483,7 +500,7 @@ namespace TcFormatter.Formatting
                 Push(FrameKind.Var, lineLevel);
                 _open = false;
                 int j = k + 1;
-                while (j < tokens.Count && (tokens[j].IsComment || (tokens[j].Kind == TokenKind.Keyword && VarModifiers.Contains(tokens[j].Text))))
+                while (j < tokens.Count && (tokens[j].IsComment || (tokens[j].Kind == TokenKind.Keyword && StLanguage.VarModifiers.Contains(tokens[j].Text))))
                     j++;
                 // stop before trailing comments so they stay on the header line
                 int last = j - 1;
@@ -499,14 +516,17 @@ namespace TcFormatter.Formatting
             {
                 case "IF":
                     Push(FrameKind.If, lineLevel);
+                    _conditionOpen = true;
                     return false;
                 case "THEN":
                     _open = false;
+                    _conditionOpen = false;
                     opensBlock = true;
                     if (expand)
                         splitAfter = k;
                     return true;
                 case "ELSIF":
+                    _conditionOpen = true;
                     return false;
                 case "ELSE":
                     var f = Find(FrameKind.If, FrameKind.Case);
@@ -536,12 +556,14 @@ namespace TcFormatter.Formatting
                     return false;
                 case "WHILE":
                     Push(FrameKind.While, lineLevel);
+                    _conditionOpen = true;
                     return false;
                 case "DO":
                     if (Top != null && (Top.Kind == FrameKind.For || Top.Kind == FrameKind.While) && !Top.HeaderDone)
                     {
                         Top.HeaderDone = true;
                         _open = false;
+                        _conditionOpen = false;
                         opensBlock = true;
                         if (expand)
                             splitAfter = k;
@@ -556,6 +578,7 @@ namespace TcFormatter.Formatting
                         splitAfter = k;
                     return true;
                 case "UNTIL":
+                    _conditionOpen = true;
                     return false;
                 case "END_IF":
                     Pop(FrameKind.If);
@@ -637,9 +660,10 @@ namespace TcFormatter.Formatting
         private bool EndKeyword(List<Token> tokens, ref int k, ref int splitAfter)
         {
             _open = false;
+            _conditionOpen = false;
             var keyword = tokens[k];
             bool hasSemicolon = k + 1 < tokens.Count && tokens[k + 1].IsOperator(";");
-            if (EndKeywordsWithOptionalSemicolon.Contains(keyword.Text))
+            if (StLanguage.EndKeywordsWithOptionalSemicolon.Contains(keyword.Text))
             {
                 if (_o.EndKeywordSemicolon == SemicolonStyle.Add && !hasSemicolon)
                 {

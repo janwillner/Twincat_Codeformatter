@@ -32,6 +32,12 @@ namespace TcFormatter.Formatting
         [Category("1 Indentation"), Description("Extra indentation levels for continuation lines of a statement that spans several lines.")]
         public int ContinuationIndent { get; set; } = 1;
 
+        [Category("1 Indentation"), Description("Indent continuation lines of IF / ELSIF / WHILE / UNTIL conditions. Off: they continue directly under the IF.")]
+        public bool IndentConditionContinuation { get; set; } = true;
+
+        [Category("1 Indentation"), Description("Align continuation lines of an assignment under its ':=' (e.g. 'bOk := bA' / '       AND bB;').")]
+        public bool AlignContinuationToAssignment { get; set; } = false;
+
         [Category("1 Indentation"), Description("Indent the members of VAR...END_VAR sections.")]
         public bool IndentVarBlocks { get; set; } = true;
 
@@ -78,6 +84,9 @@ namespace TcFormatter.Formatting
         // ---------------------------------------------------------------- Spacing
         [Category("3 Spacing"), Description("Space around assignments := => S= R= REF=.")]
         public bool SpaceAroundAssignment { get; set; } = true;
+
+        [Category("3 Spacing"), Description("Space before ':=' and '=>' of call arguments. Off gives the TwinCAT F2 style 'fbTimer(IN:= bStart, Q=> bDone)'.")]
+        public bool SpaceBeforeArgumentAssignment { get; set; } = true;
 
         [Category("3 Spacing"), Description("Space around binary operators + - * / ** = <> < > <= >= &.")]
         public bool SpaceAroundOperators { get; set; } = true;
@@ -143,6 +152,9 @@ namespace TcFormatter.Formatting
 
         [Category("5 Declarations"), Description("Declarations whose name is longer than this are not used to compute alignment (0 = no limit).")]
         public int MaxAlignedNameLength { get; set; } = 40;
+
+        [Category("5 Declarations"), Description("Put the data type of declarations at this fixed column (1-based, tabs count as IndentSize). 0 = align automatically. Example: type at tab 10 with tab width 4 = 37.")]
+        public int DeclarationTypeColumn { get; set; } = 0;
 
         [Category("5 Declarations"), Description("Align the ':=' of enum members.")]
         public bool AlignEnumValues { get; set; } = true;

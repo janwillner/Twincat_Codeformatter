@@ -118,6 +118,21 @@ namespace TcFormatter.Configuration
                 else
                     warnings.Add($"Unknown key '{pair.Key}' (expected 'format' or 'naming').");
             }
+
+            var validPatterns = new List<string>();
+            foreach (var pattern in config.Naming.IgnoreNames ?? new List<string>())
+            {
+                try
+                {
+                    _ = new System.Text.RegularExpressions.Regex(pattern ?? string.Empty);
+                    validPatterns.Add(pattern);
+                }
+                catch (ArgumentException ex)
+                {
+                    warnings.Add($"Invalid regular expression '{pattern}' in 'naming.ignoreNames' is ignored: {ex.Message}");
+                }
+            }
+            config.Naming.IgnoreNames = validPatterns;
             return config;
         }
 
@@ -187,6 +202,12 @@ namespace TcFormatter.Configuration
                 var valueType = type.GetGenericArguments()[1];
                 foreach (var entry in entries)
                 {
+                    if (entry.Value == null)
+                    {
+                        // "KEY": null removes a default entry
+                        dictionary.Remove(entry.Key);
+                        continue;
+                    }
                     try
                     {
                         object converted = valueType.IsEnum ? ParseEnum(valueType, entry.Value)

@@ -1,26 +1,25 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using System.Text.RegularExpressions;
 using TcFormatter.Lexing;
 
 namespace TcFormatter.Formatting
 {
     /// <summary>
     /// Black-style safety net: the formatted text must consist of the same significant tokens as the input.
-    /// Allowed differences: whitespace, casing of everything except strings, whitespace inside comments and
-    /// the optional semicolon after END_IF / END_CASE / END_FOR / END_WHILE / END_REPEAT.
+    /// Only the differences the formatter is allowed to make are tolerated:
+    /// whitespace between tokens, casing of keywords / types / literals, trailing whitespace and the space after
+    /// "//" in line comments, line endings inside block comments, and the semicolon after END_xx when
+    /// <see cref="FormatterOptions.EndKeywordSemicolon"/> asks to add or remove it.
+    /// Identifiers, strings, pragmas and comment contents must stay byte-identical.
     /// </summary>
     internal static class Equivalence
     {
-        private static readonly HashSet<string> EndKeywords = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
+        public static string FindDifference(string original, string formatted, FormatterOptions options)
         {
-            "END_IF", "END_CASE", "END_FOR", "END_WHILE", "END_REPEAT",
-        };
-
-        public static string FindDifference(string original, string formatted)
-        {
-            var a = Normalize(original);
-            var b = Normalize(formatted);
+            bool semicolonMayChange = options != null && options.EndKeywordSemicolon != SemicolonStyle.Preserve;
+            var a = Normalize(original, semicolonMayChange);
+            var b = Normalize(formatted, semicolonMayChange);
             int n = System.Math.Min(a.Count, b.Count);
             for (int i = 0; i < n; i++)
             {
@@ -32,49 +31,47 @@ namespace TcFormatter.Formatting
             return null;
         }
 
-        private static List<string> Normalize(string text)
+        private static List<string> Normalize(string text, bool ignoreEndSemicolons)
         {
             var result = new List<string>();
-            string previous = null;
+            string previousKeyword = null;
             foreach (var token in Lexer.Tokenize(text).Where(t => !t.IsTrivia))
             {
-                string key;
-                switch (token.Kind)
+                if (ignoreEndSemicolons && token.Text == ";" && previousKeyword != null &&
+                    StLanguage.EndKeywordsWithOptionalSemicolon.Contains(previousKeyword))
                 {
-                    case TokenKind.String:
-                        key = "S:" + token.Text;
-                        break;
-                    case TokenKind.LineComment:
-                    case TokenKind.BlockComment:
-                        key = "C:" + RemoveWhitespace(token.Text);
-                        break;
-                    default:
-                        key = token.Kind + ":" + token.Text.ToUpperInvariant();
-                        break;
-                }
-
-                // optional semicolon after END_xx
-                if (token.Text == ";" && previous != null && EndKeywords.Contains(previous))
-                {
-                    previous = null;
+                    previousKeyword = null;
                     continue;
                 }
 
-                result.Add(key);
-                previous = token.Kind == TokenKind.Keyword ? token.Text : null;
+                result.Add(token.Kind + ":" + Key(token));
+                previousKeyword = token.Kind == TokenKind.Keyword ? token.Text : null;
             }
             return result;
         }
 
-        private static string RemoveWhitespace(string s)
+        private static string Key(Token token)
         {
-            var sb = new StringBuilder(s.Length);
-            foreach (char c in s)
+            switch (token.Kind)
             {
-                if (!char.IsWhiteSpace(c))
-                    sb.Append(c);
+                case TokenKind.Keyword:
+                case TokenKind.TypeName:
+                case TokenKind.Number:
+                case TokenKind.TimeLiteral:
+                case TokenKind.DirectAddress:
+                case TokenKind.Operator:
+                    return token.Text.ToUpperInvariant();
+                case TokenKind.LineComment:
+                    string comment = token.Text.TrimEnd();
+                    if (comment.Length > 3 && comment[2] == ' ' && char.IsLetterOrDigit(comment[3]))
+                        comment = "//" + comment.Substring(3);
+                    return comment;
+                case TokenKind.BlockComment:
+                    return Regex.Replace(token.Text, "\r\n|\r", "\n");
+                default:
+                    // identifiers, strings, pragmas, unknown characters: exact
+                    return token.Text;
             }
-            return sb.ToString();
         }
     }
 }

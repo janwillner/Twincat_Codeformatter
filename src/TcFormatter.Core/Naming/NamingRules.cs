@@ -6,6 +6,19 @@ namespace TcFormatter.Naming
 {
     public enum NamingSeverity { Off, Info, Warning, Error }
 
+    /// <summary>Required casing of a name (after its prefix).</summary>
+    public enum NameCase
+    {
+        /// <summary>Not checked.</summary>
+        Any,
+
+        /// <summary>Starts with an upper case letter or digit: "MaxCycles".</summary>
+        PascalCase,
+
+        /// <summary>Upper case letters, digits and '_': "MAX_CYCLES".</summary>
+        UpperCase,
+    }
+
     public static class NamingRuleIds
     {
         /// <summary>POU / DUT / GVL / interface name prefix (FB_, F_, ST_, ...).</summary>
@@ -72,6 +85,12 @@ namespace TcFormatter.Naming
         [Category("2 Variables"), Description("Additional accepted prefix for constants (VAR CONSTANT). Empty = none.")]
         public string ConstantPrefix { get; set; } = "c";
 
+        [Category("2 Variables"), Description("Casing of constant names after the prefix (Any, PascalCase, UpperCase). UpperCase: 'dn_MAX_LIGHT_CYCLES'.")]
+        public NameCase ConstantNameCase { get; set; } = NameCase.Any;
+
+        [Category("2 Variables"), Description("Text required after the type prefix of local variables (VAR / VAR_TEMP) of methods, e.g. 'Temp' -> 'lr_TempAngle'. Empty = none.")]
+        public string MethodLocalMarker { get; set; } = "";
+
         /// <summary>
         /// Prefix required before the type prefix per variable section, e.g. { "VAR_GLOBAL": "g" } → "gbStop".
         /// Keys: VAR, VAR_INPUT, VAR_OUTPUT, VAR_IN_OUT, VAR_GLOBAL, VAR_TEMP, VAR_STAT, VAR_INST, STRUCT.
@@ -106,8 +125,11 @@ namespace TcFormatter.Naming
         public bool AllowUnderscoreInMemberNames { get; set; }
 
         /// <summary>Enum values must start with an upper case letter.</summary>
-        [Category("3 Objects"), Description("Enum values must start with an upper case letter.")]
-        public bool EnumValuesPascalCase { get; set; } = true;
+        [Category("3 Objects"), Description("Casing of enum values (Any, PascalCase, UpperCase).")]
+        public NameCase EnumValueCase { get; set; } = NameCase.PascalCase;
+
+        [Category("3 Objects"), Description("Allow names that start with '_' (e.g. object prefixes like _FB_ / _FC_).")]
+        public bool AllowLeadingUnderscore { get; set; }
 
         /// <summary>Regular expressions of names that are never reported (variables and objects).</summary>
         [Category("1 General"), Description("Regular expressions of names that are never reported.")]

@@ -86,10 +86,28 @@ namespace TcFormatter.Naming
                     _ignoredLines.Add(LineOf(t.Position));
                 _tokens = all.Where(t => !t.IsTrivia && !t.IsComment && t.Kind != TokenKind.Pragma).ToList();
                 _ignore = (rules.IgnoreNames ?? new List<string>())
-                    .Where(p => !string.IsNullOrWhiteSpace(p))
-                    .Select(p => new Regex(p, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                    .Select(TryRegex)
+                    .Where(r => r != null)
                     .ToList();
             }
+
+            /// <summary>Invalid patterns are skipped here; the configuration loader reports them as warnings.</summary>
+            private static Regex TryRegex(string pattern)
+            {
+                if (string.IsNullOrWhiteSpace(pattern))
+                    return null;
+                try
+                {
+                    return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                }
+                catch (ArgumentException)
+                {
+                    return null;
+                }
+            }
+
+            /// <summary>Header keyword of the checked declaration (FUNCTION_BLOCK, METHOD, ...), or null.</summary>
+            private string _headerKind;
 
             private Token Current => _i < _tokens.Count ? _tokens[_i] : null;
 
@@ -140,6 +158,7 @@ namespace TcFormatter.Naming
                     case "METHOD":
                     case "PROPERTY":
                     case "ACTION":
+                        _headerKind = word;
                         _i++;
                         while (Current != null && Current.Kind == TokenKind.Keyword && AccessModifiers.Contains(Current.Text))
                             _i++;
@@ -232,7 +251,7 @@ namespace TcFormatter.Naming
                 _i++;
                 bool constant = false;
                 while (Current != null && Current.Kind == TokenKind.Keyword &&
-                       (Current.Is("CONSTANT") || Current.Is("RETAIN") || Current.Is("PERSISTENT")))
+                       StLanguage.VarModifiers.Contains(Current.Text))
                 {
                     constant |= Current.Is("CONSTANT");
                     _i++;
@@ -327,20 +346,79 @@ namespace TcFormatter.Naming
                 if (_rules.ScopePrefixes != null && _rules.ScopePrefixes.TryGetValue(section, out var sp) && sp != null)
                     scope = sp;
 
-                var accepted = typePrefixes.Select(p => scope + p).ToList();
+                // local variables of methods may need a marker after the type prefix ("lr_TempAngle")
+                bool methodLocal = _headerKind == "METHOD" && (section == "VAR" || section == "VAR_TEMP");
+                string marker = methodLocal ? _rules.MethodLocalMarker ?? string.Empty : string.Empty;
+
+                var accepted = typePrefixes.Select(p => scope + p + marker).ToList();
                 if (constant && !string.IsNullOrEmpty(_rules.ConstantPrefix))
                     accepted.Add(scope + _rules.ConstantPrefix);
 
-                if (accepted.Any(p => HasPrefix(name.Text, p)))
-                    return;
+                // prefixes that may already be on the name and are replaced by a suggestion
+                var strippable = accepted.Concat(typePrefixes).Concat(typePrefixes.Select(p => scope + p))
+                    .Where(p => !string.IsNullOrEmpty(p)).Distinct().OrderByDescending(p => p.Length).ToList();
 
-                string suggestion = Suggest(name.Text, accepted[0]);
+                bool constantUpper = constant && _rules.ConstantNameCase != NameCase.Any;
+                string matched = accepted.FirstOrDefault(p => HasPrefix(name.Text, p));
+                if (matched != null)
+                {
+                    string body = name.Text.Substring(matched.Length);
+                    if (!constantUpper || MatchesCase(body, _rules.ConstantNameCase))
+                        return;
+                    string fixedName = matched + ApplyCase(body, _rules.ConstantNameCase);
+                    Report(NamingRuleIds.VariablePrefix, severity, name,
+                        $"Constant '{name.Text}' should be written in {_rules.ConstantNameCase} after the prefix (e.g. '{fixedName}').", fixedName);
+                    return;
+                }
+
+                string suggestion = Suggest(name.Text, accepted[0], strippable);
+                if (constantUpper)
+                    suggestion = accepted[0] + ApplyCase(suggestion.Substring(accepted[0].Length), _rules.ConstantNameCase);
                 string typeText = string.Join(" ", type.Select(t => t.Text));
                 string expected = string.Join("' or '", accepted.Distinct());
                 Report(NamingRuleIds.VariablePrefix, severity, name,
                     $"Variable '{name.Text}' of type {typeText} should start with '{expected}'" +
                     (_rules.RequirePascalCaseAfterPrefix ? " followed by an upper case letter" : "") +
                     $" (e.g. '{suggestion}').", suggestion);
+            }
+
+            private static bool MatchesCase(string body, NameCase nameCase)
+            {
+                if (body.Length == 0)
+                    return false;
+                switch (nameCase)
+                {
+                    case NameCase.PascalCase:
+                        return char.IsUpper(body[0]) || char.IsDigit(body[0]);
+                    case NameCase.UpperCase:
+                        return body.All(c => (c >= 'A' && c <= 'Z') || char.IsDigit(c) || c == '_');
+                    default:
+                        return true;
+                }
+            }
+
+            /// <summary>"MaxCycles" -> "MAX_CYCLES" (UpperCase) or "maxCycles" -> "MaxCycles" (PascalCase).</summary>
+            private static string ApplyCase(string body, NameCase nameCase)
+            {
+                if (body.Length == 0)
+                    return body;
+                switch (nameCase)
+                {
+                    case NameCase.UpperCase:
+                        var sb = new System.Text.StringBuilder();
+                        for (int i = 0; i < body.Length; i++)
+                        {
+                            char c = body[i];
+                            if (i > 0 && char.IsUpper(c) && (char.IsLower(body[i - 1]) || char.IsDigit(body[i - 1])) && body[i - 1] != '_')
+                                sb.Append('_');
+                            sb.Append(char.ToUpperInvariant(c));
+                        }
+                        return sb.ToString();
+                    case NameCase.PascalCase:
+                        return char.ToUpperInvariant(body[0]) + body.Substring(1);
+                    default:
+                        return body;
+                }
             }
 
             private bool HasPrefix(string name, string prefix)
@@ -355,19 +433,25 @@ namespace TcFormatter.Naming
                 return char.IsUpper(c) || char.IsDigit(c);
             }
 
-            private static string Suggest(string name, string prefix)
+            private static string Suggest(string name, string prefix, IEnumerable<string> strippable)
             {
-                // a lower case run followed by an upper case letter is an existing (wrong) prefix: replace it
-                int lower = 0;
-                while (lower < name.Length && char.IsLower(name[lower]))
-                    lower++;
-                string body;
-                if (lower > 0 && lower < name.Length && char.IsUpper(name[lower]))
-                    body = name.Substring(lower);
-                else if (prefix.Length > 0 && name.StartsWith(prefix, StringComparison.Ordinal) && name.Length > prefix.Length)
-                    body = name.Substring(prefix.Length);
-                else
-                    body = name;
+                // 1. a known prefix of this type/scope is already there: keep the rest
+                string body = strippable
+                    .Where(p => name.StartsWith(p, StringComparison.Ordinal) && name.Length > p.Length)
+                    .Select(p => name.Substring(p.Length))
+                    .FirstOrDefault();
+
+                // 2. a lower case run followed by an upper case letter or '_' is a wrong prefix: replace it
+                if (body == null)
+                {
+                    int lower = 0;
+                    while (lower < name.Length && char.IsLower(name[lower]))
+                        lower++;
+                    if (lower > 0 && lower < name.Length && (char.IsUpper(name[lower]) || name[lower] == '_'))
+                        body = name.Substring(lower);
+                    else
+                        body = name;
+                }
                 body = body.TrimStart('_');
                 if (body.Length == 0)
                     return prefix + name;
@@ -458,7 +542,7 @@ namespace TcFormatter.Naming
 
             public void CheckObject(string kind, string name, int line, int column)
             {
-                if (IsIgnoredName(name) || _ignoredLines.Contains(line))
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(kind) || IsIgnoredName(name) || _ignoredLines.Contains(line))
                     return;
                 if (CheckIdentifierText(name, line, column))
                     return;
@@ -523,14 +607,14 @@ namespace TcFormatter.Naming
 
             private void CheckEnumValue(Token value)
             {
-                if (IsIgnored(value) || CheckIdentifier(value) || !_rules.EnumValuesPascalCase)
+                if (IsIgnored(value) || CheckIdentifier(value) || _rules.EnumValueCase == NameCase.Any)
                     return;
                 var severity = _rules.SeverityOf(NamingRuleIds.EnumValue);
-                if (severity == NamingSeverity.Off || char.IsUpper(value.Text[0]))
+                if (severity == NamingSeverity.Off || MatchesCase(value.Text, _rules.EnumValueCase))
                     return;
-                string suggestion = char.ToUpperInvariant(value.Text[0]) + value.Text.Substring(1);
+                string suggestion = ApplyCase(value.Text, _rules.EnumValueCase);
                 Report(NamingRuleIds.EnumValue, severity, value,
-                    $"Enum value '{value.Text}' should start with an upper case letter (e.g. '{suggestion}').", suggestion);
+                    $"Enum value '{value.Text}' should be written in {_rules.EnumValueCase} (e.g. '{suggestion}').", suggestion);
             }
 
             /// <summary>Reports invalid identifiers; returns true when one was reported.</summary>
@@ -543,7 +627,7 @@ namespace TcFormatter.Naming
                 if (name.Contains("__"))
                     problem = "must not contain double underscores";
                 else if (name.StartsWith("_", StringComparison.Ordinal))
-                    problem = "must not start with an underscore";
+                    problem = _rules.AllowLeadingUnderscore ? null : "must not start with an underscore";
                 else if (name.Any(c => c > 127))
                     problem = "should only contain the characters A-Z, a-z, 0-9 and _";
                 if (problem == null)

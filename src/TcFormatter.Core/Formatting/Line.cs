@@ -46,6 +46,12 @@ namespace TcFormatter.Formatting
 
         public bool IsContinuation { get; set; }
 
+        /// <summary>For continuation lines: the first line of the statement.</summary>
+        public Line StatementHead { get; set; }
+
+        /// <summary>For continuation lines: open parentheses / brackets at the start of the line.</summary>
+        public int ParenDepthAtStart { get; set; }
+
         /// <summary>Last significant token opens a block (THEN, DO, VAR, case label, ...).</summary>
         public bool OpensBlock { get; set; }
 

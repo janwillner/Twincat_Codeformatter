@@ -355,6 +355,30 @@ namespace TcFormatter.Vsix.TwinCat
             }
         }
 
+        /// <summary>
+        /// Directory on disk that corresponds to the object's PLC folder (PLC folders map to file system folders),
+        /// so that a .tcformat.json next to the objects is found exactly like the CLI finds it.
+        /// </summary>
+        public static string ObjectDirectory(DTE2 dte, string treePath)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            string projectDirectory = ProjectDirectory(dte, treePath);
+            if (string.IsNullOrEmpty(projectDirectory))
+                return projectDirectory;
+
+            // "TIPC^Plc^Plc Project^POUs^Motion^FB_Motor^M_Start" -> POUs\Motion\FB_Motor (non-existing tail is dropped)
+            var parts = (treePath ?? string.Empty).Split('^');
+            string directory = projectDirectory;
+            for (int i = 3; i < parts.Length; i++)
+            {
+                string candidate = System.IO.Path.Combine(directory, parts[i]);
+                if (!System.IO.Directory.Exists(candidate))
+                    break;
+                directory = candidate;
+            }
+            return directory;
+        }
+
         public static string KindForNaming(int itemType)
         {
             switch (itemType)

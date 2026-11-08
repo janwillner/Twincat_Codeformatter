@@ -17,15 +17,20 @@ namespace TcFormatter.Formatting
         private readonly FormatterOptions _o;
         private readonly HashSet<Token> _unary;
         private readonly HashSet<Token> _caseColons;
+        private readonly HashSet<Token> _argumentAssignments;
         private readonly HashSet<Token> _spaceBefore;
 
-        public Renderer(FormatterOptions options, HashSet<Token> unary, HashSet<Token> caseColons, HashSet<Token> spaceBefore)
+        public Renderer(FormatterOptions options, HashSet<Token> unary, HashSet<Token> caseColons,
+                        HashSet<Token> argumentAssignments, HashSet<Token> spaceBefore)
         {
             _o = options;
             _unary = unary;
             _caseColons = caseColons;
+            _argumentAssignments = argumentAssignments;
             _spaceBefore = spaceBefore;
         }
+
+        private string Assign => _o.SpaceAroundAssignment ? " := " : ":=";
 
         private sealed class RLine
         {
@@ -136,6 +141,18 @@ namespace TcFormatter.Formatting
             r.CodeText = Join(r.Code, 0, r.Code.Count);
             r.CommentText = r.Comments.Count == 0 ? null : Join(r.Comments, 0, r.Comments.Count);
 
+            if (_o.AlignContinuationToAssignment && line.IsContinuation && line.ParenDepthAtStart == 0 && line.StatementHead != null)
+            {
+                // continue under the ':=' of the statement's first line
+                string target = AssignmentTarget(line.StatementHead.Tokens);
+                if (target != null)
+                {
+                    int pad = target.Length + (_o.SpaceAroundAssignment ? 1 : 0);
+                    r.Indent = IndentString(line.StatementHead.Indent) + new string(' ', pad);
+                    r.IndentWidth = line.StatementHead.Indent * Math.Max(1, _o.IndentSize) + pad;
+                }
+            }
+
             if (line.InDeclarationSection)
                 r.Decl = ParseDeclaration(r.Code);
             else if (line.IsEnumMember)
@@ -207,6 +224,29 @@ namespace TcFormatter.Formatting
             };
         }
 
+        /// <summary>Rendered text before the first top-level ':=' of a statement line, or null when it is no assignment.</summary>
+        private string AssignmentTarget(List<Token> tokens)
+        {
+            int depth = 0;
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                var t = tokens[i];
+                if (t.IsComment || t.Kind == TokenKind.Pragma)
+                    return null;
+                if (t.Kind == TokenKind.Keyword && !t.Is("THIS") && !t.Is("SUPER"))
+                    return null;
+                if (t.IsOperator("(") || t.IsOperator("["))
+                    depth++;
+                else if (t.IsOperator(")") || t.IsOperator("]"))
+                    depth--;
+                else if (depth == 0 && t.IsOperator(":="))
+                    return i == 0 ? null : Join(tokens, 0, i);
+                else if (depth == 0 && t.IsOperator("("))
+                    return null;
+            }
+            return null;
+        }
+
         private void AlignDeclarations(List<RLine> lines)
         {
             foreach (var group in Groups(lines, r => r.Decl != null))
@@ -216,12 +256,21 @@ namespace TcFormatter.Formatting
 
                 int nameWidth = group.Where(Aligned).Select(r => r.Decl.Names.Length).DefaultIfEmpty(0).Max();
                 string colon = (_o.SpaceBeforeColon ? " " : "") + ":" + (_o.SpaceAfterColon ? " " : "");
-                string assign = _o.SpaceAroundAssignment ? " := " : ":=";
 
                 var left = new Dictionary<RLine, string>();
                 foreach (var r in group)
                 {
-                    string names = _o.AlignDeclarationColons && Aligned(r) ? r.Decl.Names.PadRight(nameWidth) : r.Decl.Names;
+                    string names;
+                    if (_o.DeclarationTypeColumn > 0)
+                    {
+                        // fixed column: the type starts at DeclarationTypeColumn (1-based); longer names push it right
+                        int width = _o.DeclarationTypeColumn - 1 - r.IndentWidth - colon.Length;
+                        names = r.Decl.Names.PadRight(Math.Max(0, width));
+                    }
+                    else
+                    {
+                        names = _o.AlignDeclarationColons && Aligned(r) ? r.Decl.Names.PadRight(nameWidth) : r.Decl.Names;
+                    }
                     left[r] = names + colon + r.Decl.Type;
                 }
 
@@ -233,7 +282,7 @@ namespace TcFormatter.Formatting
                     {
                         if (_o.AlignDeclarationInitializers && Aligned(r))
                             text = text.PadRight(leftWidth);
-                        text += assign + r.Decl.Init;
+                        text += Assign + r.Decl.Init;
                     }
                     r.CodeText = text + ";";
                 }
@@ -268,12 +317,11 @@ namespace TcFormatter.Formatting
             foreach (var group in Groups(lines, r => r.Enum != null))
             {
                 int width = group.Where(r => r.Enum.Value != null).Select(r => r.Enum.Name.Length).DefaultIfEmpty(0).Max();
-                string assign = _o.SpaceAroundAssignment ? " := " : ":=";
                 foreach (var r in group)
                 {
                     string text = r.Enum.Name;
                     if (r.Enum.Value != null)
-                        text = (_o.AlignEnumValues ? text.PadRight(width) : text) + assign + r.Enum.Value;
+                        text = (_o.AlignEnumValues ? text.PadRight(width) : text) + Assign + r.Enum.Value;
                     r.CodeText = text + (r.Enum.Comma ? "," : "");
                 }
                 if (_o.DeclarationCommentAlignment == TrailingCommentAlignment.AlignInBlock)
@@ -315,9 +363,8 @@ namespace TcFormatter.Formatting
             foreach (var group in Groups(lines, r => r.AssignLeft != null && r.Wrapped == null, allowCommentLines: false))
             {
                 int width = group.Max(r => r.AssignLeft.Length);
-                string assign = _o.SpaceAroundAssignment ? " := " : ":=";
                 foreach (var r in group)
-                    r.CodeText = r.AssignLeft.PadRight(width) + assign + r.AssignRight;
+                    r.CodeText = r.AssignLeft.PadRight(width) + Assign + r.AssignRight;
             }
         }
 
@@ -425,7 +472,8 @@ namespace TcFormatter.Formatting
             var tokens = r.Source.Tokens;
             string head = Join(tokens, 0, shape.OpenParen + 1);
             string tail = Join(tokens, shape.CloseParen, shape.CloseParen + 2);
-            string sp = _o.SpaceAroundAssignment ? " " : "";
+            string spAfter = _o.SpaceAroundAssignment ? " " : "";
+            string spBefore = _o.SpaceAroundAssignment && _o.SpaceBeforeArgumentAssignment ? " " : "";
 
             var args = new List<(string Name, string Op, string Value, string Text)>();
             foreach (var (start, end) in shape.Arguments)
@@ -451,7 +499,7 @@ namespace TcFormatter.Formatting
             int nameWidth = _o.AlignWrappedArguments ? args.Where(a => a.Name != null).Select(a => a.Name.Length).DefaultIfEmpty(0).Max() : 0;
             var argTexts = args.Select(a => a.Name == null
                 ? a.Text
-                : a.Name.PadRight(nameWidth) + sp + a.Op + sp + a.Value).ToList();
+                : a.Name.PadRight(nameWidth) + spBefore + a.Op + spAfter + a.Value).ToList();
 
             string comment = r.CommentText == null ? string.Empty : new string(' ', Math.Max(1, _o.SpacesBeforeTrailingComment)) + r.CommentText;
             var result = new List<string>();
@@ -578,7 +626,9 @@ namespace TcFormatter.Formatting
             if (bt == "^")
                 return 0;
 
-            if (IsAssignment(a) || IsAssignment(b))
+            if (_argumentAssignments.Contains(b))
+                return _o.SpaceAroundAssignment && _o.SpaceBeforeArgumentAssignment ? 1 : 0;
+            if (StLanguage.IsAssignmentOperator(a) || StLanguage.IsAssignmentOperator(b))
                 return _o.SpaceAroundAssignment ? 1 : 0;
 
             if (_unary.Contains(a))
@@ -592,13 +642,6 @@ namespace TcFormatter.Formatting
         private static bool IsOperandEnd(Token t) =>
             t.Kind == TokenKind.Identifier || t.Kind == TokenKind.TypeName ||
             (t.Kind == TokenKind.Operator && (t.Text == ")" || t.Text == "]" || t.Text == "^"));
-
-        private static bool IsAssignment(Token t)
-        {
-            if (t.Kind != TokenKind.Operator)
-                return false;
-            return t.Text == ":=" || t.Text == "=>" || (t.Text.Length > 1 && t.Text.EndsWith("=", StringComparison.Ordinal) && char.IsLetter(t.Text[0]));
-        }
 
         internal string TokenText(Token t)
         {

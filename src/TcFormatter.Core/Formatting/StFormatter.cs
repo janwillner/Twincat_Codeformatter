@@ -48,7 +48,7 @@ namespace TcFormatter.Formatting
                 return new FormatResult(code, false, "Internal formatter error: " + ex.Message);
             }
 
-            string difference = Equivalence.FindDifference(code, formatted);
+            string difference = Equivalence.FindDifference(code, formatted, options);
             if (difference != null)
                 return new FormatResult(code, false, "Safety check failed, code left unchanged: " + difference);
 

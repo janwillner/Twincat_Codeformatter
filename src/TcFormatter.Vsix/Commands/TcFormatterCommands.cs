@@ -221,7 +221,7 @@ namespace TcFormatter.Vsix.Commands
         private TcFormatConfig ConfigFor(string treePath, Dictionary<string, TcFormatConfig> cache)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            string directory = PlcTree.ProjectDirectory(_dte, treePath) ?? string.Empty;
+            string directory = PlcTree.ObjectDirectory(_dte, treePath) ?? string.Empty;
             if (cache.TryGetValue(directory, out var config))
                 return config;
             try

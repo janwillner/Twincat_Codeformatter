@@ -80,40 +80,38 @@ namespace TcFormatter.TwinCatFiles
             var sections = FindSections(xml ?? string.Empty);
 
             var replacements = new List<(Section Section, string Text)>();
-            var namedActions = new HashSet<string>();
-            foreach (var section in sections)
+            if (format)
             {
-                string code = section.Code;
-                if (format)
+                foreach (var section in sections)
                 {
-                    var formatted = StFormatter.Format(code, section.Part, config.Format);
+                    var formatted = StFormatter.Format(section.Code, section.Part, config.Format);
                     if (formatted.Error != null)
-                    {
                         result.Errors.Add($"{section.ObjectPath} ({section.Part}): {formatted.Error}");
-                    }
                     else if (formatted.Changed)
-                    {
                         replacements.Add((section, formatted.Text));
-                        code = formatted.Text;
-                    }
                 }
-
-                if (lint)
-                    Lint(xml, section, code, config.Naming, result, namedActions);
             }
 
-            if (replacements.Count == 0)
-                return result;
-
-            var sb = new StringBuilder(xml);
-            foreach (var (section, text) in replacements.OrderByDescending(r => r.Section.Start))
+            if (replacements.Count > 0)
             {
-                sb.Remove(section.Start, section.End - section.Start);
-                sb.Insert(section.Start, Cdata(text));
+                var sb = new StringBuilder(xml);
+                foreach (var (section, text) in replacements.OrderByDescending(r => r.Section.Start))
+                {
+                    sb.Remove(section.Start, section.End - section.Start);
+                    sb.Insert(section.Start, Cdata(text));
+                }
+                result.Text = sb.ToString();
+                result.Changed = !string.Equals(result.Text, xml, StringComparison.Ordinal);
+                result.SectionsFormatted = replacements.Count;
             }
-            result.Text = sb.ToString();
-            result.Changed = !string.Equals(result.Text, xml, StringComparison.Ordinal);
-            result.SectionsFormatted = replacements.Count;
+
+            if (lint)
+            {
+                // lint the final text so that line numbers match the file as it is (or would be) written
+                var namedActions = new HashSet<string>();
+                foreach (var section in FindSections(result.Text))
+                    Lint(result.Text, section, section.Code, config.Naming, result, namedActions);
+            }
             return result;
         }
 

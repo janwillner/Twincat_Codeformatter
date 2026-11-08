@@ -64,11 +64,22 @@ namespace TcFormatter.Lexing
             "VAR_EXTERNAL", "VAR_INST", "VAR_CONFIG",
         };
 
-        /// <summary>Keyword operators that are binary (need surrounding spaces).</summary>
-        public static readonly HashSet<string> WordOperators = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        /// <summary>Modifiers that may follow a VAR section keyword (VAR CONSTANT, VAR_GLOBAL PERSISTENT, ...).</summary>
+        public static readonly HashSet<string> VarModifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "AND", "OR", "XOR", "MOD", "AND_THEN", "OR_ELSE",
+            "CONSTANT", "RETAIN", "PERSISTENT",
         };
+
+        /// <summary>END keywords that may optionally be followed by ';'.</summary>
+        public static readonly HashSet<string> EndKeywordsWithOptionalSemicolon = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "END_IF", "END_CASE", "END_FOR", "END_WHILE", "END_REPEAT",
+        };
+
+        /// <summary>Assignment operators: := => S= R= REF=.</summary>
+        public static bool IsAssignmentOperator(Token t) =>
+            t.Kind == TokenKind.Operator &&
+            (t.Text == ":=" || t.Text == "=>" || (t.Text.Length > 1 && t.Text.EndsWith("=", StringComparison.Ordinal) && char.IsLetter(t.Text[0])));
 
         public static bool IsKeyword(string word) => Keywords.Contains(word);
 
