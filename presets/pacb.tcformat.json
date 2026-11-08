@@ -1,0 +1,127 @@
+// TcFormatter configuration derived from the formatted PACB code in ReferenceProject
+// (TIPC^Application^Application Project^PACB, 24 POUs with their methods and actions measured).
+// Copy this file as ".tcformat.json" next to the .sln / .plcproj to use it.
+// Only settings that differ from the built-in defaults are listed; "tcfmt explain <option>" shows an example.
+{
+  "format": {
+    // ------------------------------------------------------------ indentation
+    // one tab per level, tab width 4
+    "indentStyle": "Tabs",
+    "indentSize": 4,
+    // wrapped IF conditions continue directly under the IF:  IF a\nOR b THEN
+    "indentConditionContinuation": false,
+    // "(* show of tabulators ... *)" between FUNCTION_BLOCK and the first VAR is indented by one tab
+    "indentCommentsAfterPouHeader": true,
+
+    // ------------------------------------------------------------ declarations
+    // columns are reached with tabs: name at tab 1, ':' at tab 10 (column 41), type at column 43
+    "alignWithTabs": true,
+    "declarationTypeColumn": 43,
+    // trailing comments at tab 13 (column 53); longer lines push the comment to the next tab stop
+    "declarationCommentColumn": 53,
+    // initializers follow the type directly: "dn_CntInit : DINT := 0;"
+    "alignDeclarationInitializers": false,
+
+    // ------------------------------------------------------------ blank lines
+    // two blank lines before section header comments, blank lines at block start / end are kept
+    "maxConsecutiveBlankLines": 2,
+    "removeBlankLinesAtBlockStart": false,
+    "removeBlankLinesAtBlockEnd": false,
+
+    // ------------------------------------------------------------ statements
+    "maxLineLength": 150,
+    // calls keep their line breaks (one argument per line as written by the input assistant)
+    "callLineBreakMode": "Preserve",
+    // F2 style arguments: "vi_b_Execute:= TRUE", empty ones "vo_b_Busy=> ,"
+    "spaceBeforeArgumentAssignment": false,
+    "spaceAfterEmptyArgumentAssignment": true,
+    // trailing comments of consecutive code lines are aligned
+    "codeCommentAlignment": "AlignInBlock",
+    // section header comments before ELSIF / ELSE / CASE labels get the indentation of the branch
+    "commentBeforeElseAtElseLevel": true,
+    "commentBeforeCaseLabelAtLabelLevel": true,
+    // "SEQ.INIT :" but "10:"
+    "spaceBeforeCaseLabelColon": "AfterNames"
+  },
+  "naming": {
+    "typePrefixes": {
+      "BOOL": "b_",
+      "BYTE": "by_",
+      "WORD": "w_",
+      "DWORD": "dw_",
+      "SINT": "sn_",
+      "USINT": "usn_",
+      "INT": "n_",
+      "UINT": "un_",
+      "DINT": "dn_",
+      "UDINT": "udn_",
+      "LINT": "ln_",
+      "ULINT": "uln_",
+      "REAL": "r_",
+      "LREAL": "lr_",
+      "STRING": "str_",
+      "T_AmsNetId": "str_",
+      "TIME": "time_",
+      "DATE": "date_",
+      "TOD": "dayt_",
+      "TIME_OF_DAY": "dayt_",
+      "DT": "datet_",
+      "DATE_AND_TIME": "datet_",
+      "T_DCTIME64": "dctime64_",
+      "T_DCTIME32": "dctime32_",
+      "AXIS_REF": "ax_",
+      "TON": "ton_",
+      "TOF": "tof_",
+      "TP": "tp_",
+      "CTU": "ctu_",
+      "CTD": "ctd_",
+      "CTUD": "ctud_",
+      "R_TRIG": "osr_",
+      "F_TRIG": "osf_",
+      // FB instances: fb_BlockName
+      "_FB_*": "fb_",
+      // DUT variables have no type prefix (vi_Data, vio_SM)
+      "T*": "",
+      // Beckhoff-style defaults that do not apply here
+      "FB_*": null,
+      "MC_*": null,
+      "ST_*": null,
+      "E_*": null,
+      "I_*": null
+    },
+    // arrays use the prefix of their element type (ARRAY OF LREAL -> lr_)
+    "arrayPrefix": "",
+    "arrayIncludesElementPrefix": true,
+    "pointerPrefix": "p_",
+    // references carry only the prefix of their target: vi_Cfg : REFERENCE TO TBRCH_Cfg
+    "referencePrefix": "",
+    "referenceIncludesTargetPrefix": true,
+    // inputs / outputs: vi_b_Enable, vo_str_ErrorText, vio_dn_RejectP
+    "scopePrefixes": {
+      "VAR_INPUT": "vi_",
+      "VAR_OUTPUT": "vo_",
+      "VAR_IN_OUT": "vio_"
+    },
+    // local variables of methods: lr_TempAngle (guideline; the measured methods follow it)
+    "methodLocalMarker": "Temp",
+    // constants: n_MAX_FILTER_SIZE, lr_MIN_PROD_LENGTH
+    "constantPrefix": "",
+    "constantNameCase": "UpperCase",
+    "objectPrefixes": {
+      "FUNCTION_BLOCK": "_FB_",
+      "FUNCTION": "_FC_",
+      "METHOD": "m_",
+      "ACTION": "act_",
+      "PROGRAM": "",
+      "STRUCT": "T",
+      "UNION": "T",
+      "ALIAS": "T",
+      "ENUM": "",
+      "GVL": "",
+      "PROPERTY": ""
+    },
+    "allowLeadingUnderscore": true,
+    "enumValueCase": "UpperCase",
+    "ignoreNames": ["^MAIN$", "^lbl_End$"]
+  }
+}

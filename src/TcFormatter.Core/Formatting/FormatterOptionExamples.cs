@@ -131,6 +131,8 @@ namespace TcFormatter.Formatting
             D(nameof(FormatterOptions.BlankLineBreaksAlignment), "VAR\nnA : INT;\nbLonger : BOOL;\n\nnX : INT;\nEND_VAR");
             D(nameof(FormatterOptions.MaxAlignedNameLength), "VAR\nnA : INT;\nbAVeryLongNameForTheExample : BOOL;\nnB : INT;\nEND_VAR", ints: 10);
             D(nameof(FormatterOptions.DeclarationTypeColumn), Declarations, ints: 25);
+            D(nameof(FormatterOptions.IndentCommentsAfterPouHeader), "FUNCTION_BLOCK FB_Motor\n(* template note *)\nVAR_INPUT\nbStart : BOOL;\nEND_VAR");
+            D(nameof(FormatterOptions.DeclarationCommentColumn), "VAR\nbStart : BOOL; // start\nnCounterValue : INT; // counter\nEND_VAR", ints: 41);
             D(nameof(FormatterOptions.AlignEnumValues), EnumType);
             D(nameof(FormatterOptions.AlignWithTabs), "VAR\nbStart : BOOL; // start\nnCounterValue : INT := 5;\nEND_VAR", o => o.IndentStyle = IndentStyle.Tabs);
 
@@ -152,6 +154,9 @@ namespace TcFormatter.Formatting
 
             // ---------------------------------------------------------------- CASE
             I(nameof(FormatterOptions.IndentCaseElse), "CASE nState OF\n1:\nnStep := 10;\nELSE\nnStep := 0;\nEND_CASE");
+            I(nameof(FormatterOptions.SpaceBeforeCaseLabelColon), "CASE nSeq OF\nSEQ.INIT:\nnStep := 10;\n20 :\nnStep := 30;\nEND_CASE");
+            I(nameof(FormatterOptions.SpaceAfterEmptyArgumentAssignment), "fbTimer(IN:= bStart, PT:= , Q=> );", o => o.SpaceBeforeArgumentAssignment = false);
+            I(nameof(FormatterOptions.CommentBeforeElseAtElseLevel), "IF bA THEN\nnX := 1;\n// otherwise\nELSE\nnX := 2;\nEND_IF");
             I(nameof(FormatterOptions.CommentBeforeCaseLabelAtLabelLevel), "CASE nState OF\n1:\nnStep := 10;\n// second step\n2:\nnStep := 20;\nEND_CASE");
             I(nameof(FormatterOptions.BlankLinesAfterSingleLineCase), "CASE nState OF\n1: nStep := 10;\n2: nStep := 20;\nEND_CASE", o => o.CaseStatementOnNewLine = false, ints: 1);
             I(nameof(FormatterOptions.BlankLinesAfterMultiLineCase), "CASE nState OF\n1:\nnStep := 10;\nnNext := 2;\n2:\nnStep := 20;\nEND_CASE", ints: 1);

@@ -58,6 +58,9 @@ namespace TcFormatter.Formatting
 
         internal HashSet<Token> CaseLabelColons { get; } = new HashSet<Token>();
 
+        /// <summary>The ':' of jump labels ("lbl_End:"); they end a statement like case labels.</summary>
+        internal HashSet<Token> JumpLabelColons { get; } = new HashSet<Token>();
+
         /// <summary>':=' and '=>' inside parentheses (named call arguments, FB initialisation).</summary>
         internal HashSet<Token> ArgumentAssignments { get; } = new HashSet<Token>();
 
@@ -81,7 +84,7 @@ namespace TcFormatter.Formatting
             for (int i = 0; i < lines.Count; i++)
                 ProcessLine(lines, i);
 
-            var renderer = new Renderer(_o, UnaryOperators, CaseLabelColons, ArgumentAssignments, SpaceBefore);
+            var renderer = new Renderer(_o, UnaryOperators, CaseLabelColons, JumpLabelColons, ArgumentAssignments, SpaceBefore);
             var physical = renderer.Render(lines);
 
             var sb = new StringBuilder();
@@ -283,6 +286,14 @@ namespace TcFormatter.Formatting
             _stack.RemoveRange(index, _stack.Count - index);
         }
 
+        private static readonly HashSet<string> PouHeaderKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "FUNCTION_BLOCK", "FUNCTION", "PROGRAM", "METHOD", "PROPERTY", "INTERFACE", "ACTION",
+        };
+
+        /// <summary>The last code line was a POU header (FUNCTION_BLOCK ...): comments up to the first VAR follow it.</summary>
+        private bool _afterPouHeader;
+
         private void ProcessLine(List<Line> lines, int index)
         {
             var line = lines[index];
@@ -320,7 +331,9 @@ namespace TcFormatter.Formatting
                 var caseFrame = Top != null && Top.Kind == FrameKind.Case && Top.HeaderDone ? Top : null;
                 if (caseFrame != null)
                     caseLabelColon = FindCaseLabelColon(line.Tokens);
-                level = LevelForStatementStart(first, caseLabelColon >= 0);
+                else if (_part == CodePart.Implementation)
+                    caseLabelColon = FindJumpLabelColon(line.Tokens);
+                level = LevelForStatementStart(first, caseFrame != null && caseLabelColon >= 0);
 
                 if (caseFrame != null && _o.CommentBeforeCaseLabelAtLabelLevel && caseFrame.CaseInBody &&
                     line.Tokens.All(t => t.IsComment || t.Kind == TokenKind.Pragma))
@@ -330,6 +343,18 @@ namespace TcFormatter.Formatting
                         level = CaseElseLevel(caseFrame);
                     else if (next != null && FindCaseLabelColon(next.Tokens) >= 0)
                         level = CaseLabelLevel(caseFrame);
+                }
+                else if (_o.CommentBeforeElseAtElseLevel && Top != null && Top.Kind == FrameKind.If &&
+                         line.Tokens.All(t => t.IsComment || t.Kind == TokenKind.Pragma))
+                {
+                    var next = NextCodeLine(lines, index);
+                    if (next != null && (next.Tokens[0].IsKeyword("ELSIF") || next.Tokens[0].IsKeyword("ELSE")))
+                        level = LevelForStatementStart(next.Tokens[0], false);
+                }
+                else if (_o.IndentCommentsAfterPouHeader && _afterPouHeader && _part == CodePart.Declaration && Top == null &&
+                         line.Tokens.All(t => t.IsComment || t.Kind == TokenKind.Pragma))
+                {
+                    level = 1;
                 }
 
                 if (caseFrame != null && (caseLabelColon >= 0 || first.IsKeyword("ELSE")))
@@ -358,6 +383,10 @@ namespace TcFormatter.Formatting
 
             WalkTokens(lines, index, line.Indent, caseLabelColon);
             line.FrameId = Top?.Id ?? 0;
+
+            var firstCode = line.Tokens.FirstOrDefault(t => !t.IsComment && t.Kind != TokenKind.Pragma);
+            if (firstCode != null)
+                _afterPouHeader = !continuation && firstCode.Kind == TokenKind.Keyword && PouHeaderKeywords.Contains(firstCode.Text);
         }
 
         /// <summary>"TYPE name :" or, after a line break behind TYPE, "name :" directly inside TYPE.</summary>
@@ -448,6 +477,13 @@ namespace TcFormatter.Formatting
         private static bool IsEndRegion(Token t) => t.Kind == TokenKind.Pragma && PragmaWord(t) == "endregion";
 
         /// <summary>Returns the index of the ':' that terminates a CASE label at the start of the line, or -1.</summary>
+        /// <summary>Index of the ':' of a jump label line "name:" (comments may follow), or -1.</summary>
+        private static int FindJumpLabelColon(List<Token> tokens)
+        {
+            var code = tokens.Select((t, i) => (t, i)).Where(p => !p.t.IsComment && p.t.Kind != TokenKind.Pragma).ToList();
+            return code.Count == 2 && code[0].t.Kind == TokenKind.Identifier && code[1].t.IsOperator(":") ? code[1].i : -1;
+        }
+
         private static int FindCaseLabelColon(List<Token> tokens)
         {
             int depth = 0;
@@ -562,7 +598,14 @@ namespace TcFormatter.Formatting
                             }
                             break;
                         case ":":
-                            if (k == caseLabelColon)
+                            if (k == caseLabelColon && (Top == null || Top.Kind != FrameKind.Case || !Top.HeaderDone))
+                            {
+                                // jump label "lbl_End:" outside of CASE
+                                _open = false;
+                                structural = true;
+                                JumpLabelColons.Add(t);
+                            }
+                            else if (k == caseLabelColon)
                             {
                                 _open = false;
                                 structural = true;

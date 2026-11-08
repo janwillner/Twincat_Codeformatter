@@ -109,14 +109,14 @@ als `[CRLF]` / `[LF]`.
 
 | Gruppe | Optionen |
 |---|---|
-| Einrückung | `indentStyle` (Tabs/Spaces), `indentSize`, `continuationIndent`, `indentConditionContinuation`, `alignContinuationToAssignment`, `indentVarBlocks`, `indentStructMembers`, `indentCaseLabels`, `indentCaseBody`, `indentRegions` |
+| Einrückung | `indentStyle` (Tabs/Spaces), `indentSize`, `continuationIndent`, `indentConditionContinuation`, `indentCommentsAfterPouHeader`, `alignContinuationToAssignment`, `indentVarBlocks`, `indentStructMembers`, `indentCaseLabels`, `indentCaseBody`, `indentRegions` |
 | Zeilen | `lineEnding` (Auto/CrLf/Lf), `maxConsecutiveBlankLines`, `keepExistingBlankLines`, `removeBlankLinesAtBlockStart`, `removeBlankLinesAtBlockEnd`, `blankLinesAtFileStart`, `finalNewline`, `oneStatementPerLine`, `expandSingleLineBlocks`, `caseStatementOnNewLine`, `maxLineLength` |
 | Leerzeilen (Mindestanzahl) | `blankLinesBefore/AfterStatementWithBody`, `blankLinesBefore/AfterMultiLineStatement`, `blankLinesBefore/AfterSingleLineStatement`, `blankLinesBefore/AfterSingleLineComment`, `blankLinesBefore/AfterMultiLineComment`, `blankLinesBefore/AfterSingleLineDeclaration`, `blankLinesBefore/AfterMultiLineDeclaration`, `blankLinesAfterVarBlocks` |
-| Leerzeichen | `spaceAroundAssignment`, `spaceBeforeArgumentAssignment` (F2-Stil `IN:= x`), `spaceBetweenNestedParentheses`, `spaceAroundOperators`, `spaceAfterComma`, `spaceBeforeComma`, `spaceInsideParentheses`, `spaceInsideBrackets`, `spaceBeforeCallParenthesis`, `spaceAfterArrayKeyword`, `spaceAroundRange`, `spaceBeforeColon`, `spaceAfterColon`, `spaceAfterLineCommentStart`, `spacesBeforeTrailingComment` |
+| Leerzeichen | `spaceAroundAssignment`, `spaceBeforeArgumentAssignment` (F2-Stil `IN:= x`), `spaceAfterEmptyArgumentAssignment` (`Q=> ,`), `spaceBetweenNestedParentheses`, `spaceAroundOperators`, `spaceAfterComma`, `spaceBeforeComma`, `spaceInsideParentheses`, `spaceInsideBrackets`, `spaceBeforeCallParenthesis`, `spaceAfterArrayKeyword`, `spaceAroundRange`, `spaceBeforeColon`, `spaceAfterColon`, `spaceAfterLineCommentStart`, `spacesBeforeTrailingComment` |
 | Groß/Klein | `keywordCasing`, `typeCasing`, `literalCasing` (TRUE, 16#FF, T#, INT#), `timeUnitCasing` (Preserve/Upper/Lower) |
-| Deklarationen | `declarationTypeColumn` (feste Typspalte, z. B. 37 = Tab 10), `alignDeclarationColons`, `alignDeclarationInitializers`, `declarationCommentAlignment`, `blankLineBreaksAlignment`, `maxAlignedNameLength`, `alignEnumValues`, `alignWithTabs` |
-| Anweisungen | `endKeywordSemicolon` (Preserve/Add/Remove), `codeCommentAlignment`, `alignConsecutiveAssignments`, `callLineBreakMode` (Preserve/Long/LongOrMultiline/Always/Never), `maxCallArgumentsOnSingleLine`, `callWrapStyle`, `wrappedCallClosingParenthesisOnNewLine`, `alignWrappedArguments`, `simpleIfOnSingleLine`, `lineBreakBeforeThen`, `indentThen`, `lineBreakBeforeDo`, `indentDo`, `keepExistingLineBreaks` |
-| CASE | `indentCaseElse`, `commentBeforeCaseLabelAtLabelLevel`, `blankLinesAfterSingleLineCase`, `blankLinesAfterMultiLineCase` |
+| Deklarationen | `declarationTypeColumn` (feste Typspalte, z. B. 37 = Tab 10; mit `alignWithTabs` per Tabs), `declarationCommentColumn` (feste Kommentarspalte), `alignDeclarationColons`, `alignDeclarationInitializers`, `declarationCommentAlignment`, `blankLineBreaksAlignment`, `maxAlignedNameLength`, `alignEnumValues`, `alignWithTabs` |
+| Anweisungen | `endKeywordSemicolon` (Preserve/Add/Remove), `codeCommentAlignment`, `alignConsecutiveAssignments`, `callLineBreakMode` (Preserve/Long/LongOrMultiline/Always/Never), `maxCallArgumentsOnSingleLine`, `callWrapStyle`, `wrappedCallClosingParenthesisOnNewLine`, `alignWrappedArguments`, `simpleIfOnSingleLine`, `commentBeforeElseAtElseLevel`, `lineBreakBeforeThen`, `indentThen`, `lineBreakBeforeDo`, `indentDo`, `keepExistingLineBreaks` |
+| CASE | `indentCaseElse`, `commentBeforeCaseLabelAtLabelLevel`, `spaceBeforeCaseLabelColon` (None/Always/AfterNames), `blankLinesAfterSingleLineCase`, `blankLinesAfterMultiLineCase` |
 | Typen und Initialisierer | `structOnNewLine`, `lineBreakAfterTypeKeyword`, `indentTypeDeclaration`, `enumLineBreakMode`, `maxEnumValuesOnSingleLine`, `lineBreakBefore/AfterEnumOpenParenthesis`, `lineBreakBeforeEnumCloseParenthesis`, `initializerLineBreakMode`, `maxInitializerArgumentsOnSingleLine`, `lineBreakAfterInitializerOpenParenthesis`, `initializerClosingParenthesisOnNewLine` |
 
 ### Namensprüfung (`naming`)
@@ -173,6 +173,18 @@ Nicht automatisch prüfbar sind:
 - Muster mit Maschinen- und Baugruppenteilen (`MODx_UNITx_…`)
 - Kommentarstil und Hilfe-Header
 - Verschachtelungstiefe und POU-Länge
+
+### Vorlage aus dem PACB-Referenzcode
+
+[presets/pacb.tcformat.json](presets/pacb.tcformat.json) ist aus dem formatierten PACB-Code im
+`ReferenceProject` abgeleitet und nachgemessen: 24 Bausteine mit Methoden und Aktionen, rund 13 000 Zeilen.
+Mit der Vorlage ändert der Formatter dort 7–9 % der Zeilen; das sind fast ausschließlich Stellen, an denen
+der Referenzcode in sich uneinheitlich ist (z. B. `: BOOL; 	//` neben `: BOOL; //`). Kernpunkte:
+- Tabs; Name bei Tab 1, `:` bei Tab 10 (Spalte 41), Typ ab Spalte 43, Kommentare ab Tab 13 (Spalte 53)
+- Kommentare vor `ELSIF`/`ELSE`/CASE-Labels auf Ebene des Zweigs, `SEQ.INIT :` aber `10:`
+- F2-Stil bei Aufrufen inkl. `vo_b_Busy=> ,`; Zeilenumbrüche in Aufrufen bleiben erhalten
+- 2 Leerzeilen vor Abschnitten, Leerzeilen am Blockanfang/-ende bleiben stehen
+- Namensregeln der Firmenrichtlinie; Referenzen ohne `ref_` (`vi_Cfg : REFERENCE TO TBRCH_Cfg`)
 
 ## Kompatibilität und Tests
 

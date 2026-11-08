@@ -20,15 +20,17 @@ namespace TcFormatter.Formatting
         private readonly FormatterOptions _o;
         private readonly HashSet<Token> _unary;
         private readonly HashSet<Token> _caseColons;
+        private readonly HashSet<Token> _jumpColons;
         private readonly HashSet<Token> _argumentAssignments;
         private readonly HashSet<Token> _spaceBefore;
 
-        public Renderer(FormatterOptions options, HashSet<Token> unary, HashSet<Token> caseColons,
+        public Renderer(FormatterOptions options, HashSet<Token> unary, HashSet<Token> caseColons, HashSet<Token> jumpColons,
                         HashSet<Token> argumentAssignments, HashSet<Token> spaceBefore)
         {
             _o = options;
             _unary = unary;
             _caseColons = caseColons;
+            _jumpColons = jumpColons;
             _argumentAssignments = argumentAssignments;
             _spaceBefore = spaceBefore;
         }
@@ -444,7 +446,16 @@ namespace TcFormatter.Formatting
                 var left = new Dictionary<RLine, string>();
                 foreach (var r in group)
                 {
-                    if (_o.DeclarationTypeColumn > 0)
+                    if (_o.DeclarationTypeColumn > 0 && TabAlign && (_o.DeclarationTypeColumn - 1 - tabColon.Length) % TabWidth == 0)
+                    {
+                        // fixed column with tabs: ':' on the tab stop, longer names push it to the next stop
+                        int target = _o.DeclarationTypeColumn - 1 - tabColon.Length;
+                        string names = PadTo(r.Decl.Names, r.IndentWidth, target);
+                        if (names.Length == r.Decl.Names.Length)
+                            names += "\t";
+                        left[r] = names + tabColon + r.Decl.Type;
+                    }
+                    else if (_o.DeclarationTypeColumn > 0)
                     {
                         // fixed column: the type starts at DeclarationTypeColumn (1-based); longer names push it right
                         int width = _o.DeclarationTypeColumn - 1 - r.IndentWidth - colon.Length;
@@ -480,8 +491,7 @@ namespace TcFormatter.Formatting
                     r.CodeText = text + ";";
                 }
 
-                if (_o.DeclarationCommentAlignment == TrailingCommentAlignment.AlignInBlock)
-                    AlignComments(group);
+                AlignDeclarationComments(group);
             }
         }
 
@@ -517,8 +527,7 @@ namespace TcFormatter.Formatting
                         text = AlignNamed(text, width, _o.AlignEnumValues, ":=", r.Enum.Value);
                     r.CodeText = text + (r.Enum.Comma ? "," : "");
                 }
-                if (_o.DeclarationCommentAlignment == TrailingCommentAlignment.AlignInBlock)
-                    AlignComments(group);
+                AlignDeclarationComments(group);
             }
         }
 
@@ -598,6 +607,24 @@ namespace TcFormatter.Formatting
                     group.Add(r);
             }
             Flush();
+        }
+
+        private void AlignDeclarationComments(List<RLine> group)
+        {
+            if (_o.DeclarationCommentColumn > 0)
+            {
+                // fixed column; lines that reach it get the comment at the next tab stop / after the minimum gap
+                int fixedColumn = _o.DeclarationCommentColumn - 1;
+                foreach (var r in group.Where(r => r.CommentText != null && !r.IsCommentOnly))
+                {
+                    int end = r.IndentWidth + Visual(r.CodeText, r.IndentWidth);
+                    r.CommentColumn = end < fixedColumn ? fixedColumn : AlignColumn(end, Math.Max(1, _o.SpacesBeforeTrailingComment));
+                }
+            }
+            else if (_o.DeclarationCommentAlignment == TrailingCommentAlignment.AlignInBlock)
+            {
+                AlignComments(group);
+            }
         }
 
         private void AlignComments(List<RLine> group)
@@ -874,6 +901,8 @@ namespace TcFormatter.Formatting
 
             if (bt == ";")
                 return 0;
+            if (_o.SpaceAfterEmptyArgumentAssignment && _argumentAssignments.Contains(a) && (bt == "," || bt == ")"))
+                return 1; // "PT:= ," as written by the TwinCAT input assistant
             if (bt == ",")
                 return _o.SpaceBeforeComma ? 1 : 0;
             if (at == ",")
@@ -881,9 +910,12 @@ namespace TcFormatter.Formatting
             if (at == ";")
                 return 1;
 
-            if (_caseColons.Contains(b))
+            if (_jumpColons.Contains(b))
                 return 0;
-            if (_caseColons.Contains(a))
+            if (_caseColons.Contains(b))
+                return _o.SpaceBeforeCaseLabelColon == CaseLabelColonSpace.Always ||
+                       (_o.SpaceBeforeCaseLabelColon == CaseLabelColonSpace.AfterNames && a.Kind == TokenKind.Identifier) ? 1 : 0;
+            if (_caseColons.Contains(a) || _jumpColons.Contains(a))
                 return 1;
             if (bt == ":")
                 return _o.SpaceBeforeColon ? 1 : 0;

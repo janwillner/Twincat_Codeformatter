@@ -506,6 +506,8 @@ namespace TcFormatter.Naming
             private static List<string> Combine(string prefix, bool includeInner, List<string> inner)
             {
                 prefix = prefix ?? string.Empty;
+                if (includeInner && inner == null && prefix.Length == 0)
+                    return null; // unknown element / target type and no own prefix: nothing to check
                 if (!includeInner || inner == null)
                     return new List<string> { prefix };
                 return inner.Select(p => prefix + p).ToList();

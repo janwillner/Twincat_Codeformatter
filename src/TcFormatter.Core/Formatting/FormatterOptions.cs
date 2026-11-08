@@ -16,6 +16,9 @@ namespace TcFormatter.Formatting
 
     public enum CallWrapStyle { OnePerLineIndented, AlignWithOpeningParenthesis }
 
+    /// <summary>Space before the colon of CASE labels.</summary>
+    public enum CaseLabelColonSpace { None, Always, AfterNames }
+
     /// <summary>How lists in parentheses (calls, enums, initializers) are broken over lines.</summary>
     public enum LineBreakMode
     {
@@ -107,6 +110,9 @@ namespace TcFormatter.Formatting
         [Category("3 Spacing"), Description("Space before ':=' and '=>' of call arguments. Off gives the TwinCAT F2 style 'fbTimer(IN:= bStart, Q=> bDone)'.")]
         public bool SpaceBeforeArgumentAssignment { get; set; } = true;
 
+        [Category("3 Spacing"), Description("Keep a space after ':=' / '=>' of call arguments without a value, as written by the TwinCAT input assistant: 'fbTimer(IN:= , Q=> )'.")]
+        public bool SpaceAfterEmptyArgumentAssignment { get; set; } = false;
+
         [Category("3 Spacing"), Description("Space around binary operators + - * / ** = <> < > <= >= &.")]
         public bool SpaceAroundOperators { get; set; } = true;
 
@@ -172,8 +178,14 @@ namespace TcFormatter.Formatting
         [Category("5 Declarations"), Description("Declarations whose name is longer than this are not used to compute alignment (0 = no limit).")]
         public int MaxAlignedNameLength { get; set; } = 40;
 
-        [Category("5 Declarations"), Description("Put the data type of declarations at this fixed column (1-based, tabs count as IndentSize). 0 = align automatically. Example: type at tab 10 with tab width 4 = 37.")]
+        [Category("5 Declarations"), Description("Put the data type of declarations at this fixed column (1-based, tabs count as IndentSize). 0 = align automatically. Example: type at tab 10 with tab width 4 = 37. With AlignWithTabs the names are padded with tabs when the ':' falls on a tab stop (': ' on tab stop 41 -> 43).")]
         public int DeclarationTypeColumn { get; set; } = 0;
+
+        [Category("5 Declarations"), Description("Indent comments between the POU header (FUNCTION_BLOCK, METHOD, ...) and the first VAR block by one level.")]
+        public bool IndentCommentsAfterPouHeader { get; set; } = false;
+
+        [Category("5 Declarations"), Description("Put trailing comments of declarations at this fixed column (1-based, tabs count as IndentSize); longer lines move the comment to the next tab stop (or one space further). 0 = use DeclarationCommentAlignment.")]
+        public int DeclarationCommentColumn { get; set; } = 0;
 
         [Category("5 Declarations"), Description("Align the ':=' of enum members.")]
         public bool AlignEnumValues { get; set; } = true;
@@ -225,8 +237,14 @@ namespace TcFormatter.Formatting
         [Category("7 CASE"), Description("Indent ELSE of a CASE statement like the labels. Off: ELSE is aligned with CASE.")]
         public bool IndentCaseElse { get; set; } = true;
 
+        [Category("7 CASE"), Description("Space before the ':' of CASE labels. AfterNames: only after symbolic labels ('SEQ.INIT :' but '10:').")]
+        public CaseLabelColonSpace SpaceBeforeCaseLabelColon { get; set; } = CaseLabelColonSpace.None;
+
         [Category("7 CASE"), Description("A comment directly before a CASE label or ELSE gets the indentation of the label.")]
         public bool CommentBeforeCaseLabelAtLabelLevel { get; set; } = false;
+
+        [Category("6 Statements"), Description("A comment directly before ELSIF / ELSE of an IF statement gets the indentation of ELSIF / ELSE (e.g. a section header comment).")]
+        public bool CommentBeforeElseAtElseLevel { get; set; } = false;
 
         [Category("7 CASE"), Description("Minimum blank lines after a CASE branch that consists of a single line.")]
         public int BlankLinesAfterSingleLineCase { get; set; } = 0;
