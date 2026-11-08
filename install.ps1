@@ -73,10 +73,10 @@ foreach ($ide in $shells) {
         Write-Host "Removed TcFormatter from $ide"
     }
 
-    # tell the shell to rebuild its extension / MEF cache on next start
+    # tell the shell to rebuild its extension / MEF / menu cache on next start
+    # (TcXaeShell does not support "/updateconfiguration" and only shows an "Invalid Command Line" dialog)
     $marker = Join-Path $ide 'Extensions\extensions.configurationchanged'
     Set-Content -Path $marker -Value '' -Force
-    & (Join-Path $ide 'TcXaeShell.exe') /updateconfiguration | Out-Null
 }
 
 exit 0
