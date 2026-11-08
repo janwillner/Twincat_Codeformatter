@@ -1,0 +1,19 @@
+* text=auto
+*.cs text eol=crlf
+*.csproj text eol=crlf
+*.sln text eol=crlf
+*.md text eol=crlf
+*.json text eol=crlf
+*.vsixmanifest text eol=crlf
+*.vsct text eol=crlf
+# TwinCAT files: keep bytes exactly as written by XAE
+*.TcPOU -text
+*.TcDUT -text
+*.TcGVL -text
+*.TcIO -text
+*.TcTTO -text
+*.TcSMC -text
+*.plcproj -text
+*.tsproj -text
+*.dll binary
+*.tlb binary
