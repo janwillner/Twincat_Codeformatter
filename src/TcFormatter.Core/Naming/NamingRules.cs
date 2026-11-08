@@ -179,7 +179,7 @@ namespace TcFormatter.Naming
             ["MC_*"] = "fb",
             ["ST_*"] = "st",
             ["E_*"] = "e",
-            ["I_*"] = "i",
+            ["I_*"] = "i,ip",
         };
     }
 }

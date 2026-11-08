@@ -357,18 +357,17 @@ namespace TcFormatter.Naming
 
             private static string Suggest(string name, string prefix)
             {
+                // a lower case run followed by an upper case letter is an existing (wrong) prefix: replace it
+                int lower = 0;
+                while (lower < name.Length && char.IsLower(name[lower]))
+                    lower++;
                 string body;
-                if (prefix.Length > 0 && name.StartsWith(prefix, StringComparison.Ordinal) && name.Length > prefix.Length)
-                {
+                if (lower > 0 && lower < name.Length && char.IsUpper(name[lower]))
+                    body = name.Substring(lower);
+                else if (prefix.Length > 0 && name.StartsWith(prefix, StringComparison.Ordinal) && name.Length > prefix.Length)
                     body = name.Substring(prefix.Length);
-                }
                 else
-                {
-                    int lower = 0;
-                    while (lower < name.Length && char.IsLower(name[lower]))
-                        lower++;
-                    body = lower > 0 && lower < name.Length && char.IsUpper(name[lower]) ? name.Substring(lower) : name;
-                }
+                    body = name;
                 body = body.TrimStart('_');
                 if (body.Length == 0)
                     return prefix + name;

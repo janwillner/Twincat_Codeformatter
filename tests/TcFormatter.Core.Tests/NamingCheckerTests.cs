@@ -67,6 +67,13 @@ public class NamingCheckerTests
     }
 
     [Fact]
+    public void Suggestion_replaces_a_wrong_lower_case_prefix()
+    {
+        var result = Check("FUNCTION_BLOCK FB_X\nVAR\n    xpMotor : I_Motor;\n    bstart : BOOL;\n    ipMotor : I_Motor;\nEND_VAR");
+        Assert.Equal(new[] { ("xpMotor", "iMotor"), ("bstart", "bStart") }, result.Select(d => (d.Name, d.Suggestion)));
+    }
+
+    [Fact]
     public void Requires_an_upper_case_letter_after_the_prefix()
     {
         var result = Check("FUNCTION_BLOCK FB_X\nVAR\n    bstart : BOOL;\n    number : INT;\nEND_VAR");
