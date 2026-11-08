@@ -101,6 +101,7 @@
       </Button>
       <Button guid="guidTcFormatterCmdSet" id="cmdImportStweep" priority="0x0115" type="Button">
         <Parent guid="guidTcFormatterCmdSet" id="SettingsGroup" />
+        <CommandFlag>AllowParams</CommandFlag>
         <Strings>
           <ButtonText>Import STweep Settings...</ButtonText>
           <CanonicalName>.TcFormatter.ImportStweepSettings</CanonicalName>

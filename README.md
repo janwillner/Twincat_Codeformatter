@@ -4,7 +4,7 @@ Code-Formatter und Namensprüfung für **TwinCAT 3 Structured Text**, als Extens
 **TcXaeShell 4024 und 4026** und als Kommandozeilenwerkzeug `tcfmt`.
 
 - Formatiert einen **einzelnen Baustein**, einen **Ordner** oder ein **ganzes PLC-Projekt**: POUs, Methoden, Properties, Aktionen, Transitionen, DUTs, GVLs und Interfaces.
-- Bietet **über 50 Einstellungen** (vergleichbar mit STweep oder Black). Sie werden über *Extras → Optionen → TcFormatter* oder eine `.tcformat.json` im Projekt gesetzt.
+- Bietet **über 100 Einstellungen** (vergleichbar mit STweep oder Black). Sie werden über *Extras → Optionen → TcFormatter* oder eine `.tcformat.json` im Projekt gesetzt.
 - Prüft Namen mit **einstellbaren Präfixen pro Datentyp**, Variablenbereich und Objektart. Standard ist die Beckhoff-Hungarian-Notation.
 - **Formatiert sicher wie Black:** Das Ergebnis muss dieselben Tokens enthalten wie das Original, sonst bleibt der Code unverändert. Ein zweiter Lauf ändert nichts mehr (idempotent).
 - Bereiche zwischen `// tcfmt: off` und `// tcfmt: on` bleiben unverändert.
@@ -41,6 +41,7 @@ Im Menü **Extras → TcFormatter** steht nur, was es nicht per Rechtsklick gibt
 |---|---|
 | Format All PLC Projects / Check Naming of All PLC Projects | alle PLC-Projekte der Projektmappe |
 | Create / Open .tcformat.json for Solution | Projektkonfiguration neben der `.sln` anlegen und öffnen |
+| Import STweep Settings... | eine aus STweep exportierte `.stweep`-Datei als IDE-Einstellungen übernehmen |
 | Settings... | *Extras → Optionen → TcFormatter* |
 
 Protokoll im Ausgabefenster unter **TcFormatter**. Alle Befehle lassen sich auch skripten, z. B.
@@ -58,6 +59,7 @@ tcfmt format --diff <pfad>  Änderungen als Diff anzeigen, nichts schreiben
 tcfmt lint    <pfad>...     Namensprüfung (MSBuild-Format, anklickbar), --json, --fail-on warning
 tcfmt stdin --part impl     Text von stdin formatieren
 tcfmt init                  .tcformat.json mit allen Optionen und Beschreibungen anlegen
+tcfmt import-stweep <datei.stweep> [<ordner>]   STweep-Export in eine .tcformat.json umwandeln
 ```
 
 Die CLI ändert nur den Inhalt der CDATA-Abschnitte; alles andere bleibt byte-identisch. Vor dem
@@ -97,11 +99,14 @@ Gesucht wird in dieser Reihenfolge, wie bei Black:
 | Gruppe | Optionen |
 |---|---|
 | Einrückung | `indentStyle` (Tabs/Spaces), `indentSize`, `continuationIndent`, `indentConditionContinuation`, `alignContinuationToAssignment`, `indentVarBlocks`, `indentStructMembers`, `indentCaseLabels`, `indentCaseBody`, `indentRegions` |
-| Zeilen | `lineEnding` (Auto/CrLf/Lf), `maxConsecutiveBlankLines`, `removeBlankLinesAtBlockStart`, `removeBlankLinesAtBlockEnd`, `finalNewline`, `oneStatementPerLine`, `expandSingleLineBlocks`, `caseStatementOnNewLine`, `maxLineLength` |
-| Leerzeichen | `spaceAroundAssignment`, `spaceBeforeArgumentAssignment` (F2-Stil `IN:= x`), `spaceAroundOperators`, `spaceAfterComma`, `spaceBeforeComma`, `spaceInsideParentheses`, `spaceInsideBrackets`, `spaceBeforeCallParenthesis`, `spaceAfterArrayKeyword`, `spaceAroundRange`, `spaceBeforeColon`, `spaceAfterColon`, `spaceAfterLineCommentStart`, `spacesBeforeTrailingComment` |
+| Zeilen | `lineEnding` (Auto/CrLf/Lf), `maxConsecutiveBlankLines`, `keepExistingBlankLines`, `removeBlankLinesAtBlockStart`, `removeBlankLinesAtBlockEnd`, `blankLinesAtFileStart`, `finalNewline`, `oneStatementPerLine`, `expandSingleLineBlocks`, `caseStatementOnNewLine`, `maxLineLength` |
+| Leerzeilen (Mindestanzahl) | `blankLinesBefore/AfterStatementWithBody`, `blankLinesBefore/AfterMultiLineStatement`, `blankLinesBefore/AfterSingleLineStatement`, `blankLinesBefore/AfterSingleLineComment`, `blankLinesBefore/AfterMultiLineComment`, `blankLinesBefore/AfterSingleLineDeclaration`, `blankLinesBefore/AfterMultiLineDeclaration`, `blankLinesAfterVarBlocks` |
+| Leerzeichen | `spaceAroundAssignment`, `spaceBeforeArgumentAssignment` (F2-Stil `IN:= x`), `spaceBetweenNestedParentheses`, `spaceAroundOperators`, `spaceAfterComma`, `spaceBeforeComma`, `spaceInsideParentheses`, `spaceInsideBrackets`, `spaceBeforeCallParenthesis`, `spaceAfterArrayKeyword`, `spaceAroundRange`, `spaceBeforeColon`, `spaceAfterColon`, `spaceAfterLineCommentStart`, `spacesBeforeTrailingComment` |
 | Groß/Klein | `keywordCasing`, `typeCasing`, `literalCasing` (TRUE, 16#FF, T#, INT#), `timeUnitCasing` (Preserve/Upper/Lower) |
-| Deklarationen | `declarationTypeColumn` (feste Typspalte, z. B. 37 = Tab 10), `alignDeclarationColons`, `alignDeclarationInitializers`, `declarationCommentAlignment`, `blankLineBreaksAlignment`, `maxAlignedNameLength`, `alignEnumValues` |
-| Anweisungen | `endKeywordSemicolon` (Preserve/Add/Remove), `codeCommentAlignment`, `alignConsecutiveAssignments`, `wrapLongCalls`, `wrapCallsWithArgumentsAtLeast`, `callWrapStyle`, `wrappedCallClosingParenthesisOnNewLine`, `alignWrappedArguments`, `rejoinWrappedCalls` |
+| Deklarationen | `declarationTypeColumn` (feste Typspalte, z. B. 37 = Tab 10), `alignDeclarationColons`, `alignDeclarationInitializers`, `declarationCommentAlignment`, `blankLineBreaksAlignment`, `maxAlignedNameLength`, `alignEnumValues`, `alignWithTabs` |
+| Anweisungen | `endKeywordSemicolon` (Preserve/Add/Remove), `codeCommentAlignment`, `alignConsecutiveAssignments`, `callLineBreakMode` (Preserve/Long/LongOrMultiline/Always/Never), `maxCallArgumentsOnSingleLine`, `callWrapStyle`, `wrappedCallClosingParenthesisOnNewLine`, `alignWrappedArguments`, `simpleIfOnSingleLine`, `lineBreakBeforeThen`, `indentThen`, `lineBreakBeforeDo`, `indentDo`, `keepExistingLineBreaks` |
+| CASE | `indentCaseElse`, `commentBeforeCaseLabelAtLabelLevel`, `blankLinesAfterSingleLineCase`, `blankLinesAfterMultiLineCase` |
+| Typen und Initialisierer | `structOnNewLine`, `lineBreakAfterTypeKeyword`, `indentTypeDeclaration`, `enumLineBreakMode`, `maxEnumValuesOnSingleLine`, `lineBreakBefore/AfterEnumOpenParenthesis`, `lineBreakBeforeEnumCloseParenthesis`, `initializerLineBreakMode`, `maxInitializerArgumentsOnSingleLine`, `lineBreakAfterInitializerOpenParenthesis`, `initializerClosingParenthesisOnNewLine` |
 
 ### Namensprüfung (`naming`)
 
@@ -122,6 +127,22 @@ Weitere Einstellungen:
 - Ein Standardeintrag einer Tabelle wird mit `null` entfernt, z. B. `"typePrefixes": { "I_*": null }`.
 - Ausnahmen gibt es per Regex (`ignoreNames`) oder per Kommentar `// tcfmt: ignore-naming` in der Zeile.
 - Der Schweregrad ist pro Regel einstellbar (Off/Info/Warning/Error).
+
+### STweep-Einstellungen übernehmen
+
+TcFormatter kennt die öffentlich dokumentierten STweep-Einstellungen und kann eine aus STweep **exportierte**
+Einstellungsdatei (`*.stweep`, *STweep → Settings → Export*) importieren:
+
+- in TwinCAT: **Extras → TcFormatter → Import STweep Settings...**. Die Werte werden zu den IDE-Einstellungen;
+  eine `.tcformat.json` im Projekt hat weiterhin Vorrang.
+- per Kommandozeile: `tcfmt import-stweep meine.stweep <Ordner>` schreibt dort eine `.tcformat.json`.
+
+Einstellungen ohne Gegenstück meldet der Import einzeln, statt sie stillschweigend zu verwerfen. Es fehlen noch die
+Umbruchmodi für verkettete Ausdrücke und Methoden, CASE-Listen, FOR- und IF-Köpfe sowie die Klammerstile.
+[presets/stweep-import.tcformat.json](presets/stweep-import.tcformat.json) ist die umgewandelte Fassung von
+[presets/STSweepConfig.STweep](presets/STSweepConfig.STweep).
+
+Zusätzlich werden die STweep-Direktiven `{STweep.Disable}` / `{STweep.Enable}` wie `tcfmt: off/on` beachtet.
 
 ### Vorlage für die Firmenrichtlinie
 
