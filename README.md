@@ -29,16 +29,19 @@ auf den Code zu. GUIDs und das XML der Projektdateien fasst sie deshalb nicht an
 rekursiv auf alles darunter. TwinCAT benutzt für PLC-Knoten eigene Kontextmenüs (`PlcFile`, `PlcFolder`, `PlcProject`, …);
 die Extension hängt ihr Untermenü beim Start dort ein (Protokoll im Ausgabefenster „TcFormatter“).
 
-Alle Befehle stehen außerdem im Menü **Extras → TcFormatter**:
-
-| Befehl | Wirkung | Tastenkürzel |
+| Kontextmenü → TcFormatter | Wirkung | Tastenkürzel |
 |---|---|---|
-| Format Selection | markierte Objekte, Ordner oder PLC-Projekte rekursiv formatieren | `Strg+Alt+Shift+K` |
-| Format Current Object | das Objekt im aktiven Editor formatieren | `Strg+Alt+Shift+F` |
+| Format Selection | angeklicktes Objekt, Ordner oder PLC-Projekt (rekursiv) formatieren | `Strg+Alt+Shift+K` |
+| Format Current Object (im Editor) | das Objekt im aktiven Editor formatieren | `Strg+Alt+Shift+F` |
 | Check Naming of Selection | Namensprüfung, Ergebnisse in der **Fehlerliste** (Doppelklick öffnet das Objekt) | |
-| Format All PLC Projects / Check Naming of All PLC Projects | ganze Projektmappe | |
-| Create / Open .tcformat.json | Projektkonfiguration neben der `.sln` anlegen und öffnen | |
-| Settings... | *Extras → Optionen → TcFormatter* | |
+
+Im Menü **Extras → TcFormatter** steht nur, was es nicht per Rechtsklick gibt:
+
+| Extras → TcFormatter | Wirkung |
+|---|---|
+| Format All PLC Projects / Check Naming of All PLC Projects | alle PLC-Projekte der Projektmappe |
+| Create / Open .tcformat.json for Solution | Projektkonfiguration neben der `.sln` anlegen und öffnen |
+| Settings... | *Extras → Optionen → TcFormatter* |
 
 Protokoll im Ausgabefenster unter **TcFormatter**. Alle Befehle lassen sich auch skripten, z. B.
 `DTE.ExecuteCommand("TcFormatter.FormatSelection", "TIPC^Plc1^Plc1 Project^POUs")`.

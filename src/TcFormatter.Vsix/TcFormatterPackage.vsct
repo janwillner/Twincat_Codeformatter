@@ -29,9 +29,6 @@
       <Group guid="guidTcFormatterCmdSet" id="ContextGroup" priority="0x0600">
         <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_ITEMNODE" />
       </Group>
-      <Group guid="guidTcFormatterCmdSet" id="FormatGroup" priority="0x0100">
-        <Parent guid="guidTcFormatterCmdSet" id="ToolsSubMenu" />
-      </Group>
       <Group guid="guidTcFormatterCmdSet" id="SolutionGroup" priority="0x0200">
         <Parent guid="guidTcFormatterCmdSet" id="ToolsSubMenu" />
       </Group>
@@ -45,7 +42,7 @@
 
     <Buttons>
       <Button guid="guidTcFormatterCmdSet" id="cmdFormatSelection" priority="0x0100" type="Button">
-        <Parent guid="guidTcFormatterCmdSet" id="FormatGroup" />
+        <Parent guid="guidTcFormatterCmdSet" id="ContextFormatGroup" />
         <CommandFlag>AllowParams</CommandFlag>
         <Strings>
           <ButtonText>Format Selection (object / folder / project)</ButtonText>
@@ -54,7 +51,7 @@
         </Strings>
       </Button>
       <Button guid="guidTcFormatterCmdSet" id="cmdFormatDocument" priority="0x0110" type="Button">
-        <Parent guid="guidTcFormatterCmdSet" id="FormatGroup" />
+        <Parent guid="guidTcFormatterCmdSet" id="ContextFormatGroup" />
         <Strings>
           <ButtonText>Format Current Object</ButtonText>
           <CanonicalName>.TcFormatter.FormatCurrentObject</CanonicalName>
@@ -62,7 +59,7 @@
         </Strings>
       </Button>
       <Button guid="guidTcFormatterCmdSet" id="cmdCheckSelection" priority="0x0120" type="Button">
-        <Parent guid="guidTcFormatterCmdSet" id="FormatGroup" />
+        <Parent guid="guidTcFormatterCmdSet" id="ContextFormatGroup" />
         <CommandFlag>AllowParams</CommandFlag>
         <Strings>
           <ButtonText>Check Naming of Selection</ButtonText>
@@ -133,16 +130,6 @@
     <CommandPlacement guid="guidTcFormatterCmdSet" id="ContextGroup" priority="0x0600">
       <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN" />
     </CommandPlacement>
-
-    <CommandPlacement guid="guidTcFormatterCmdSet" id="cmdFormatSelection" priority="0x0100">
-      <Parent guid="guidTcFormatterCmdSet" id="ContextFormatGroup" />
-    </CommandPlacement>
-    <CommandPlacement guid="guidTcFormatterCmdSet" id="cmdFormatDocument" priority="0x0110">
-      <Parent guid="guidTcFormatterCmdSet" id="ContextFormatGroup" />
-    </CommandPlacement>
-    <CommandPlacement guid="guidTcFormatterCmdSet" id="cmdCheckSelection" priority="0x0120">
-      <Parent guid="guidTcFormatterCmdSet" id="ContextFormatGroup" />
-    </CommandPlacement>
   </CommandPlacements>
 
   <KeyBindings>
@@ -155,7 +142,6 @@
     <GuidSymbol name="guidTcFormatterCmdSet" value="{4e7a1c2b-8d3f-4a5e-b6c7-1f2e3d4c5b6a}">
       <IDSymbol name="ToolsMenuGroup" value="0x1010" />
       <IDSymbol name="ContextGroup" value="0x1011" />
-      <IDSymbol name="FormatGroup" value="0x1012" />
       <IDSymbol name="SolutionGroup" value="0x1013" />
       <IDSymbol name="SettingsGroup" value="0x1014" />
       <IDSymbol name="ContextFormatGroup" value="0x1015" />
