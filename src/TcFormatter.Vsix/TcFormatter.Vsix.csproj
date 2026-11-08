@@ -1,0 +1,84 @@
+<Project>
+
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+  <!--
+    TwinCAT XAE extension. One VSIX for:
+      - TcXaeShell 4024 (VS 2017/2019 based, 32 bit)  -> InstallationTarget [15.0,17.0) x86
+      - TcXaeShell 4026 (VS 2022 based, 64 bit)       -> InstallationTarget [17.0,18.0) amd64
+    Therefore it is compiled against the VS 15.0 SDK (AnyCPU, .NET Framework 4.7.2). VS 2022 redirects
+    the 15.0 shell assemblies to its own versions.
+    Build with the full MSBuild of Visual Studio (not 'dotnet build'), see build.ps1.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <RootNamespace>TcFormatter.Vsix</RootNamespace>
+    <AssemblyName>TcFormatter.Vsix</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Version>1.0.0</Version>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <UseCodebase>true</UseCodebase>
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
+    <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
+    <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+    <CopyOutputSymbolsToOutputDirectory>true</CopyOutputSymbolsToOutputDirectory>
+    <DeployExtension>false</DeployExtension>
+    <CreateVsixContainer>true</CreateVsixContainer>
+    <NoWarn>$(NoWarn);VSTHRD010;VSTHRD100;VSTHRD101;VSTHRD110;VSSDK006</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.Shell.15.0" Version="15.0.26228" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VisualStudio.Shell.Framework" Version="15.0.26228" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VisualStudio.Shell.Interop.10.0" Version="10.0.30319" ExcludeAssets="runtime" />
+    <PackageReference Include="EnvDTE" Version="8.0.1" ExcludeAssets="runtime" />
+    <PackageReference Include="EnvDTE80" Version="8.0.1" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VisualStudio.Shell.Interop.14.0.DesignTime" Version="14.3.25407" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2120" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Design" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="TCatSysManagerLib">
+      <HintPath>..\..\lib\TCatSysManagerLib.dll</HintPath>
+      <EmbedInteropTypes>true</EmbedInteropTypes>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TcFormatter.Core\TcFormatter.Core.csproj">
+      <SetTargetFramework>TargetFramework=net472</SetTargetFramework>
+      <IncludeOutputGroupsInVSIX>BuiltProjectOutputGroup</IncludeOutputGroupsInVSIX>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="source.extension.vsixmanifest" SubType="Designer" />
+    <VSCTCompile Include="TcFormatterPackage.vsct" ResourceName="Menus.ctmenu" />
+    <Content Include="Resources\TcFormatter.png" IncludeInVSIX="true" />
+  </ItemGroup>
+
+  <!--
+    Embed the EnvDTE interop types instead of referencing the interop assemblies (works in VS 15, 16 and 17).
+    The 7.1-9.0 Shell.Interop assemblies cannot be embedded (no PIA attribute); VS 2022 type-forwards them
+    to Microsoft.VisualStudio.Interop, so the remaining VSIXCompatibility1001 warning for them is expected.
+  -->
+  <Target Name="TcFormatterEmbedInteropTypes" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferencePath Condition="'%(FileName)' == 'EnvDTE' or '%(FileName)' == 'EnvDTE80'">
+        <EmbedInteropTypes>true</EmbedInteropTypes>
+      </ReferencePath>
+    </ItemGroup>
+  </Target>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" Condition="Exists('$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets')" />
+
+</Project>

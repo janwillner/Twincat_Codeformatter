@@ -21,7 +21,7 @@ public sealed class CliTests : IDisposable
     {
         var stdout = new StringWriter();
         var stderr = new StringWriter();
-        int exit = Program.Run(args, new StringReader(""), stdout, stderr);
+        int exit = Program.Run(args.Append("--no-user-config").ToArray(), new StringReader(""), stdout, stderr);
         return (exit, stdout.ToString(), stderr.ToString());
     }
 
@@ -70,7 +70,7 @@ public sealed class CliTests : IDisposable
     public void Stdin_formats_text()
     {
         var stdout = new StringWriter();
-        int exit = Program.Run(new[] { "stdin", "--part", "impl" }, new StringReader("a:=1;"), stdout, new StringWriter());
+        int exit = Program.Run(new[] { "stdin", "--part", "impl", "--no-user-config" }, new StringReader("a:=1;"), stdout, new StringWriter());
         Assert.Equal((Program.Ok, "a := 1;"), (exit, stdout.ToString()));
     }
 

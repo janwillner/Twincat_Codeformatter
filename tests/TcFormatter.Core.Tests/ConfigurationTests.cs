@@ -111,7 +111,7 @@ public sealed class ConfigurationTests : IDisposable
     public void Uses_defaults_when_no_file_exists()
     {
         var empty = Directory.CreateDirectory(Path.Combine(_root, "nothing")).FullName;
-        var config = TcFormatConfig.LoadFor(empty, out var source, out _, stopAt: _root);
+        var config = TcFormatConfig.LoadFor(empty, out var source, out _, stopAt: _root, includeUserConfig: false);
         Assert.Null(source);
         Assert.Equal(new FormatterOptions().IndentSize, config.Format.IndentSize);
     }

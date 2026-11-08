@@ -25,6 +25,7 @@ public static class Program
 
         Options:
           --config <file>      Use this configuration instead of the nearest .tcformat.json
+          --no-user-config     Ignore %APPDATA%\TcFormatter\.tcformat.json (IDE settings) when no project file exists
           --check              Do not write files; exit code 1 when a file would be reformatted
           --diff               Print a diff of the changes (implies --check unless --write is given)
           --write              Write files even with --diff
@@ -126,7 +127,7 @@ public static class Program
         }
         else
         {
-            config = TcFormatConfig.LoadFor(directory, out _, out warnings);
+            config = TcFormatConfig.LoadFor(directory, out _, out warnings, includeUserConfig: !options.NoUserConfig);
         }
         foreach (var warning in warnings)
             stderr.WriteLine("warning: " + warning);
@@ -152,6 +153,7 @@ internal sealed record CliOptions
     public string? StdinPath { get; init; }
     public bool Force { get; init; }
     public bool Quiet { get; init; }
+    public bool NoUserConfig { get; init; }
     public bool ShowHelp { get; init; }
     public bool ShowVersion { get; init; }
 
@@ -176,6 +178,7 @@ internal sealed record CliOptions
                 case "--json": o = o with { Json = true }; break;
                 case "--force": o = o with { Force = true }; break;
                 case "-q": case "--quiet": o = o with { Quiet = true }; break;
+                case "--no-user-config": o = o with { NoUserConfig = true }; break;
                 case "--part": o = o with { Part = Next(ref i, a).ToLowerInvariant() }; break;
                 case "--path": o = o with { StdinPath = Next(ref i, a) }; break;
                 case "--fail-on":

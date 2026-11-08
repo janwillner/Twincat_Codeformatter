@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+
+  <Commands package="guidTcFormatterPackage">
+    <Menus>
+      <!-- Tools > TcFormatter -->
+      <Menu guid="guidTcFormatterCmdSet" id="ToolsSubMenu" priority="0x0100" type="Menu">
+        <Parent guid="guidTcFormatterCmdSet" id="ToolsMenuGroup" />
+        <Strings>
+          <ButtonText>TcFormatter</ButtonText>
+        </Strings>
+      </Menu>
+      <!-- Context menus (Solution Explorer item / folder / project, code window) > TcFormatter -->
+      <Menu guid="guidTcFormatterCmdSet" id="ContextSubMenu" priority="0x0100" type="Menu">
+        <Parent guid="guidTcFormatterCmdSet" id="ContextGroup" />
+        <Strings>
+          <ButtonText>TcFormatter</ButtonText>
+        </Strings>
+      </Menu>
+    </Menus>
+
+    <Groups>
+      <Group guid="guidTcFormatterCmdSet" id="ToolsMenuGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" />
+      </Group>
+      <Group guid="guidTcFormatterCmdSet" id="ContextGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_ITEMNODE" />
+      </Group>
+      <Group guid="guidTcFormatterCmdSet" id="FormatGroup" priority="0x0100">
+        <Parent guid="guidTcFormatterCmdSet" id="ToolsSubMenu" />
+      </Group>
+      <Group guid="guidTcFormatterCmdSet" id="SolutionGroup" priority="0x0200">
+        <Parent guid="guidTcFormatterCmdSet" id="ToolsSubMenu" />
+      </Group>
+      <Group guid="guidTcFormatterCmdSet" id="SettingsGroup" priority="0x0300">
+        <Parent guid="guidTcFormatterCmdSet" id="ToolsSubMenu" />
+      </Group>
+      <Group guid="guidTcFormatterCmdSet" id="ContextFormatGroup" priority="0x0100">
+        <Parent guid="guidTcFormatterCmdSet" id="ContextSubMenu" />
+      </Group>
+    </Groups>
+
+    <Buttons>
+      <Button guid="guidTcFormatterCmdSet" id="cmdFormatSelection" priority="0x0100" type="Button">
+        <Parent guid="guidTcFormatterCmdSet" id="FormatGroup" />
+        <CommandFlag>AllowParams</CommandFlag>
+        <Strings>
+          <ButtonText>Format Selection (object / folder / project)</ButtonText>
+          <CanonicalName>.TcFormatter.FormatSelection</CanonicalName>
+          <LocCanonicalName>.TcFormatter.FormatSelection</LocCanonicalName>
+        </Strings>
+      </Button>
+      <Button guid="guidTcFormatterCmdSet" id="cmdFormatDocument" priority="0x0110" type="Button">
+        <Parent guid="guidTcFormatterCmdSet" id="FormatGroup" />
+        <Strings>
+          <ButtonText>Format Current Object</ButtonText>
+          <CanonicalName>.TcFormatter.FormatCurrentObject</CanonicalName>
+          <LocCanonicalName>.TcFormatter.FormatCurrentObject</LocCanonicalName>
+        </Strings>
+      </Button>
+      <Button guid="guidTcFormatterCmdSet" id="cmdCheckSelection" priority="0x0120" type="Button">
+        <Parent guid="guidTcFormatterCmdSet" id="FormatGroup" />
+        <CommandFlag>AllowParams</CommandFlag>
+        <Strings>
+          <ButtonText>Check Naming of Selection</ButtonText>
+          <CanonicalName>.TcFormatter.CheckNamingSelection</CanonicalName>
+          <LocCanonicalName>.TcFormatter.CheckNamingSelection</LocCanonicalName>
+        </Strings>
+      </Button>
+      <Button guid="guidTcFormatterCmdSet" id="cmdFormatSolution" priority="0x0100" type="Button">
+        <Parent guid="guidTcFormatterCmdSet" id="SolutionGroup" />
+        <Strings>
+          <ButtonText>Format All PLC Projects</ButtonText>
+          <CanonicalName>.TcFormatter.FormatAll</CanonicalName>
+          <LocCanonicalName>.TcFormatter.FormatAll</LocCanonicalName>
+        </Strings>
+      </Button>
+      <Button guid="guidTcFormatterCmdSet" id="cmdCheckSolution" priority="0x0110" type="Button">
+        <Parent guid="guidTcFormatterCmdSet" id="SolutionGroup" />
+        <Strings>
+          <ButtonText>Check Naming of All PLC Projects</ButtonText>
+          <CanonicalName>.TcFormatter.CheckNamingAll</CanonicalName>
+          <LocCanonicalName>.TcFormatter.CheckNamingAll</LocCanonicalName>
+        </Strings>
+      </Button>
+      <Button guid="guidTcFormatterCmdSet" id="cmdOpenConfig" priority="0x0100" type="Button">
+        <Parent guid="guidTcFormatterCmdSet" id="SettingsGroup" />
+        <Strings>
+          <ButtonText>Create / Open .tcformat.json for Solution</ButtonText>
+          <CanonicalName>.TcFormatter.OpenConfiguration</CanonicalName>
+          <LocCanonicalName>.TcFormatter.OpenConfiguration</LocCanonicalName>
+        </Strings>
+      </Button>
+      <Button guid="guidTcFormatterCmdSet" id="cmdOpenOptions" priority="0x0110" type="Button">
+        <Parent guid="guidTcFormatterCmdSet" id="SettingsGroup" />
+        <Strings>
+          <ButtonText>Settings...</ButtonText>
+          <CanonicalName>.TcFormatter.Settings</CanonicalName>
+          <LocCanonicalName>.TcFormatter.Settings</LocCanonicalName>
+        </Strings>
+      </Button>
+    </Buttons>
+  </Commands>
+
+  <CommandPlacements>
+    <!-- the context sub menu appears for items, folders, projects, multi-selections and in code windows -->
+    <CommandPlacement guid="guidTcFormatterCmdSet" id="ContextGroup" priority="0x0600">
+      <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_FOLDERNODE" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidTcFormatterCmdSet" id="ContextGroup" priority="0x0600">
+      <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_PROJNODE" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidTcFormatterCmdSet" id="ContextGroup" priority="0x0600">
+      <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_XPROJ_MULTIITEM" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidTcFormatterCmdSet" id="ContextGroup" priority="0x0600">
+      <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_NOCOMMANDS" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidTcFormatterCmdSet" id="ContextGroup" priority="0x0600">
+      <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN" />
+    </CommandPlacement>
+
+    <CommandPlacement guid="guidTcFormatterCmdSet" id="cmdFormatSelection" priority="0x0100">
+      <Parent guid="guidTcFormatterCmdSet" id="ContextFormatGroup" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidTcFormatterCmdSet" id="cmdFormatDocument" priority="0x0110">
+      <Parent guid="guidTcFormatterCmdSet" id="ContextFormatGroup" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidTcFormatterCmdSet" id="cmdCheckSelection" priority="0x0120">
+      <Parent guid="guidTcFormatterCmdSet" id="ContextFormatGroup" />
+    </CommandPlacement>
+  </CommandPlacements>
+
+  <KeyBindings>
+    <KeyBinding guid="guidTcFormatterCmdSet" id="cmdFormatDocument" editor="guidVSStd97" key1="F" mod1="Control Alt Shift" />
+    <KeyBinding guid="guidTcFormatterCmdSet" id="cmdFormatSelection" editor="guidVSStd97" key1="K" mod1="Control Alt Shift" />
+  </KeyBindings>
+
+  <Symbols>
+    <GuidSymbol name="guidTcFormatterPackage" value="{9c3f2e41-5b7a-4d6e-8f10-2a4b6c8d0e12}" />
+    <GuidSymbol name="guidTcFormatterCmdSet" value="{4e7a1c2b-8d3f-4a5e-b6c7-1f2e3d4c5b6a}">
+      <IDSymbol name="ToolsMenuGroup" value="0x1010" />
+      <IDSymbol name="ContextGroup" value="0x1011" />
+      <IDSymbol name="FormatGroup" value="0x1012" />
+      <IDSymbol name="SolutionGroup" value="0x1013" />
+      <IDSymbol name="SettingsGroup" value="0x1014" />
+      <IDSymbol name="ContextFormatGroup" value="0x1015" />
+      <IDSymbol name="ToolsSubMenu" value="0x1100" />
+      <IDSymbol name="ContextSubMenu" value="0x1101" />
+      <IDSymbol name="cmdFormatSelection" value="0x0100" />
+      <IDSymbol name="cmdFormatDocument" value="0x0101" />
+      <IDSymbol name="cmdCheckSelection" value="0x0102" />
+      <IDSymbol name="cmdFormatSolution" value="0x0103" />
+      <IDSymbol name="cmdCheckSolution" value="0x0104" />
+      <IDSymbol name="cmdOpenConfig" value="0x0105" />
+      <IDSymbol name="cmdOpenOptions" value="0x0106" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>

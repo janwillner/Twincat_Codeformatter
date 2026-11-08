@@ -47,16 +47,45 @@ namespace TcFormatter.Configuration
             return null;
         }
 
-        /// <summary>Loads the configuration that applies to <paramref name="startDirectory"/>; defaults when none exists.</summary>
-        public static TcFormatConfig LoadFor(string startDirectory, out string sourceFile, out IReadOnlyList<string> warnings, string stopAt = null)
+        /// <summary>
+        /// Per-user configuration (written by the IDE options pages). Used when no project file applies.
+        /// </summary>
+        public static string UserConfigFile =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TcFormatter", FileName);
+
+        /// <summary>
+        /// Loads the configuration that applies to <paramref name="startDirectory"/>: the nearest project
+        /// .tcformat.json, otherwise the per-user file, otherwise the defaults.
+        /// </summary>
+        public static TcFormatConfig LoadFor(string startDirectory, out string sourceFile, out IReadOnlyList<string> warnings,
+                                             string stopAt = null, bool includeUserConfig = true)
         {
             sourceFile = FindFile(startDirectory, stopAt);
+            if (sourceFile == null && includeUserConfig && File.Exists(UserConfigFile))
+                sourceFile = UserConfigFile;
             if (sourceFile == null)
             {
                 warnings = Array.Empty<string>();
                 return new TcFormatConfig();
             }
             return Load(sourceFile, out warnings);
+        }
+
+        /// <summary>Loads the per-user configuration or the defaults.</summary>
+        public static TcFormatConfig LoadUser(out IReadOnlyList<string> warnings)
+        {
+            if (!File.Exists(UserConfigFile))
+            {
+                warnings = Array.Empty<string>();
+                return new TcFormatConfig();
+            }
+            return Load(UserConfigFile, out warnings);
+        }
+
+        public void SaveTo(string file)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file));
+            File.WriteAllText(file, ToJson(includeDescriptions: true), new UTF8Encoding(false));
         }
 
         public static TcFormatConfig Load(string file, out IReadOnlyList<string> warnings)
