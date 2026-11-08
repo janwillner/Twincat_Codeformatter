@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<TcSmItem xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.22" ClassName="CNestedPlcProjDef">
+	<Project GUID="{5A33FDBA-5378-4E60-967C-87C29C4015E2}" Name="FormatterTest" PrjFilePath="..\..\FormatterTest\FormatterTest.plcproj" TmcFilePath="..\..\FormatterTest\FormatterTest.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
+		<Instance File="FormatterTest Instance.xti"/>
+	</Project>
+</TcSmItem>

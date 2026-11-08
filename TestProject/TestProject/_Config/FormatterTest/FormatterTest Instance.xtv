@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<TcSmItem xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.22" ClassName="CTComPlcObjDef">
+	<Instance TmcHash="{A672E449-CC89-F037-006E-400CC05A9CB3}">
+		<Vars VarGrpType="1">
+			<Name>PlcTask Inputs</Name>
+			<Var>
+				<Name>MAIN.bInput</Name>
+				<Type>BOOL</Type>
+			</Var>
+		</Vars>
+		<Vars VarGrpType="2" AreaNo="1">
+			<Name>PlcTask Outputs</Name>
+			<Var>
+				<Name>MAIN.bOutput</Name>
+				<Type>BOOL</Type>
+			</Var>
+		</Vars>
+	</Instance>
+</TcSmItem>
