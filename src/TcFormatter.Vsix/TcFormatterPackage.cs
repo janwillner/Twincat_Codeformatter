@@ -17,6 +17,9 @@ namespace TcFormatter.Vsix
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration("TcFormatter", "Code formatter and naming checker for TwinCAT 3 Structured Text", "1.0.0")]
     [ProvideMenuResource("Menus.ctmenu", 1)]
+    // load in the background at start so the sub menus in TwinCAT's own context menus are available right away
+    [ProvideAutoLoad("ADFC4E64-0397-11D1-9F4E-00A0C911004F", PackageAutoLoadFlags.BackgroundLoad)] // UIContextGuids80.NoSolution
+    [ProvideAutoLoad("f1536ef8-92ec-443c-9ed7-fdadf150da82", PackageAutoLoadFlags.BackgroundLoad)] // UIContextGuids80.SolutionExists
     [ProvideOptionPage(typeof(FormatOptionsPage), "TcFormatter", "Formatting", 0, 0, true)]
     [ProvideOptionPage(typeof(NamingOptionsPage), "TcFormatter", "Naming", 0, 0, true)]
     [Guid(PackageGuidString)]
@@ -38,6 +41,16 @@ namespace TcFormatter.Vsix
             Log = new OutputLog(this);
             ErrorList = new NamingErrorList(this, dte);
             new TcFormatterCommands(this, dte, Log, ErrorList).Register(commandService);
+
+            try
+            {
+                var menus = PlcContextMenus.Attach(dte);
+                Log.Write("TcFormatter context menu added to: " + (menus.Count == 0 ? "(no TwinCAT PLC menus found)" : string.Join(", ", menus)));
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Could not add the TcFormatter context menu to the TwinCAT PLC menus: " + ex.Message);
+            }
         }
 
         protected override void Dispose(bool disposing)

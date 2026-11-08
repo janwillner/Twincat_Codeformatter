@@ -175,10 +175,45 @@ namespace TcFormatter.Vsix.TwinCat
         }
 
         /// <summary>Tree items for the current Solution Explorer selection.</summary>
+        /// <summary>
+        /// Tree items for the current selection: the nodes selected in the Solution Explorer when it is the active
+        /// window (right click on a POU, folder or project), otherwise the selection of the active window
+        /// (e.g. the object of the active editor).
+        /// </summary>
         public static List<ITcSmTreeItem> Selection(DTE2 dte)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             var result = new List<ITcSmTreeItem>();
+
+            if (SolutionExplorerIsActive(dte))
+            {
+                try
+                {
+                    if (dte.ToolWindows.SolutionExplorer.SelectedItems is object[] nodes)
+                    {
+                        foreach (var node in nodes)
+                        {
+                            object automation = null;
+                            try
+                            {
+                                automation = (node as UIHierarchyItem)?.Object;
+                            }
+                            catch
+                            {
+                                // node without automation object
+                            }
+                            AddTreeItem(result, (automation as ProjectItem)?.Object ?? (automation as Project)?.Object);
+                        }
+                    }
+                }
+                catch
+                {
+                    // fall back to DTE.SelectedItems
+                }
+                if (result.Count > 0)
+                    return result;
+            }
+
             try
             {
                 foreach (SelectedItem selected in dte.SelectedItems)
@@ -192,10 +227,7 @@ namespace TcFormatter.Vsix.TwinCat
                     {
                         // item without automation object
                     }
-                    if (obj is ITcSmTreeItem item)
-                        result.Add(item);
-                    else if (obj is ITcSysManager manager)
-                        result.Add(manager.LookupTreeItem("TIPC"));
+                    AddTreeItem(result, obj);
                 }
             }
             catch
@@ -203,6 +235,27 @@ namespace TcFormatter.Vsix.TwinCat
                 // no selection available
             }
             return result;
+        }
+
+        public static bool SolutionExplorerIsActive(DTE2 dte)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                return dte.ActiveWindow != null && dte.ActiveWindow.Type == vsWindowType.vsWindowTypeSolutionExplorer;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void AddTreeItem(List<ITcSmTreeItem> result, object obj)
+        {
+            if (obj is ITcSmTreeItem item)
+                result.Add(item);
+            else if (obj is ITcSysManager manager)
+                result.Add(manager.LookupTreeItem("TIPC"));
         }
 
         /// <summary>Tree item of the object shown in the active editor window.</summary>

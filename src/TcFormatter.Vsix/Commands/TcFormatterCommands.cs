@@ -30,6 +30,7 @@ namespace TcFormatter.Vsix.Commands
         private const int CheckSolutionId = 0x0104;
         private const int OpenConfigId = 0x0105;
         private const int OpenOptionsId = 0x0106;
+        private const int DiagnoseMenusId = 0x0107;
 
         private readonly TcFormatterPackage _package;
         private readonly DTE2 _dte;
@@ -46,22 +47,71 @@ namespace TcFormatter.Vsix.Commands
 
         public void Register(OleMenuCommandService service)
         {
-            Add(service, FormatSelectionId, arg => Run(arg, recursive: true, format: true, lint: false, selection: true));
-            Add(service, CheckSelectionId, arg => Run(arg, recursive: true, format: false, lint: true, selection: true));
-            Add(service, FormatDocumentId, arg => RunActiveObject());
-            Add(service, FormatSolutionId, arg => RunAll(format: true, lint: false));
-            Add(service, CheckSolutionId, arg => RunAll(format: false, lint: true));
-            Add(service, OpenConfigId, arg => OpenConfiguration());
-            Add(service, OpenOptionsId, arg => _package.ShowOptionPage(typeof(FormatOptionsPage)));
+            Add(service, FormatSelectionId, (arg, click) => Run(arg, click, recursive: true, format: true, lint: false));
+            Add(service, CheckSelectionId, (arg, click) => Run(arg, click, recursive: true, format: false, lint: true));
+            Add(service, FormatDocumentId, (arg, click) => RunActiveObject(click));
+            Add(service, FormatSolutionId, (arg, click) => RunAll(format: true, lint: false));
+            Add(service, CheckSolutionId, (arg, click) => RunAll(format: false, lint: true));
+            Add(service, OpenConfigId, (arg, click) => OpenConfiguration());
+            Add(service, OpenOptionsId, (arg, click) => _package.ShowOptionPage(typeof(FormatOptionsPage)));
+            Add(service, DiagnoseMenusId, (arg, click) =>
+            {
+                string file = Path.Combine(Path.GetTempPath(), "TcFormatter-menus.txt");
+                if (arg != null && arg.StartsWith("select:", StringComparison.OrdinalIgnoreCase))
+                {
+                    // select a Solution Explorer node (path of captions separated by '/') and report what the
+                    // selection commands would process - simulates a right click on that node
+                    // "select:<path>|format" or "|check" also runs the command on that selection (= right click + menu entry)
+                    string spec = arg.Substring("select:".Length);
+                    string action = null;
+                    int bar = spec.LastIndexOf('|');
+                    if (bar > 0)
+                    {
+                        action = spec.Substring(bar + 1).Trim().ToLowerInvariant();
+                        spec = spec.Substring(0, bar);
+                    }
+                    string report = Ui.MenuDiagnostics.SelectAndDescribe(_dte, spec);
+                    File.WriteAllText(file, report);
+                    _log.Write(report);
+                    if (action == "format" || action == "check")
+                    {
+                        var simulated = new ClickContext { Selection = PlcTree.Selection(_dte), ActiveObject = PlcTree.ActiveObject(_dte) };
+                        Run(null, simulated, recursive: true, format: action == "format", lint: action == "check");
+                    }
+                    return;
+                }
+                File.WriteAllText(file, Ui.MenuDiagnostics.Dump(_dte, arg));
+                _log.Write("Context menu report written to " + file);
+            });
         }
 
-        private void Add(OleMenuCommandService service, int id, Action<string> handler)
+        /// <summary>What was selected / active at the moment the command was invoked (e.g. the right-clicked node).</summary>
+        private sealed class ClickContext
+        {
+            public List<ITcSmTreeItem> Selection = new List<ITcSmTreeItem>();
+            public ITcSmTreeItem ActiveObject;
+        }
+
+        private void Add(OleMenuCommandService service, int id, Action<string, ClickContext> handler)
         {
             var command = new OleMenuCommand((sender, e) =>
             {
                 ThreadHelper.ThrowIfNotOnUIThread();
                 string argument = (e as OleMenuCmdEventArgs)?.InValue as string;
                 argument = string.IsNullOrWhiteSpace(argument) ? null : argument.Trim().Trim('"');
+
+                // capture the selection now: when the work runs later, the focus (and thus the selection)
+                // may already have moved on to another window
+                var click = new ClickContext();
+                try
+                {
+                    click.Selection = PlcTree.Selection(_dte);
+                    click.ActiveObject = PlcTree.ActiveObject(_dte);
+                }
+                catch (Exception)
+                {
+                    // the selection is resolved again when the command runs
+                }
 
                 // Run from the UI message loop instead of inside the command invocation: when the command is
                 // executed through DTE.ExecuteCommand by another process, the call arrives as an incoming COM
@@ -71,7 +121,7 @@ namespace TcFormatter.Vsix.Commands
                     ThreadHelper.ThrowIfNotOnUIThread();
                     try
                     {
-                        handler(argument);
+                        handler(argument, click);
                     }
                     catch (Exception ex)
                     {
@@ -90,7 +140,7 @@ namespace TcFormatter.Vsix.Commands
 
         // ------------------------------------------------------------------ command handlers
 
-        private void Run(string treePath, bool recursive, bool format, bool lint, bool selection)
+        private void Run(string treePath, ClickContext click, bool recursive, bool format, bool lint)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             List<ITcSmTreeItem> roots;
@@ -106,10 +156,10 @@ namespace TcFormatter.Vsix.Commands
             }
             else
             {
-                roots = selection ? PlcTree.Selection(_dte) : new List<ITcSmTreeItem>();
+                roots = click.Selection.Count > 0 ? click.Selection : PlcTree.Selection(_dte);
                 if (roots.Count == 0)
                 {
-                    var active = PlcTree.ActiveObject(_dte);
+                    var active = click.ActiveObject ?? PlcTree.ActiveObject(_dte);
                     if (active != null)
                         roots.Add(active);
                 }
@@ -123,13 +173,13 @@ namespace TcFormatter.Vsix.Commands
             Execute(roots, recursive, format, lint, "selection: " + PlcTree.Describe(roots));
         }
 
-        private void RunActiveObject()
+        private void RunActiveObject(ClickContext click)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            var active = PlcTree.ActiveObject(_dte);
+            var active = click.ActiveObject ?? PlcTree.ActiveObject(_dte);
             if (active == null)
             {
-                Run(null, recursive: false, format: true, lint: false, selection: true);
+                Run(null, click, recursive: false, format: true, lint: false);
                 return;
             }
             Execute(new List<ITcSmTreeItem> { active }, recursive: false, format: true, lint: false, PlcTree.Describe(new[] { active }));

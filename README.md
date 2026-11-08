@@ -24,7 +24,12 @@ auf den Code zu. GUIDs und das XML der Projektdateien fasst sie deshalb nicht an
 
 ## Benutzung in TwinCAT XAE
 
-Menü **Extras → TcFormatter**, Kontextmenü im Projektmappen-Explorer und im Editor **→ TcFormatter**:
+**Rechtsklick** auf eine POU, DUT, GVL, Methode, einen Ordner, ein PLC-Projekt oder in den ST-Editor → **TcFormatter** →
+*Format Selection* oder *Check Naming of Selection*. Die Befehle wirken auf das angeklickte Objekt, bei Ordnern und Projekten
+rekursiv auf alles darunter. TwinCAT benutzt für PLC-Knoten eigene Kontextmenüs (`PlcFile`, `PlcFolder`, `PlcProject`, …);
+die Extension hängt ihr Untermenü beim Start dort ein (Protokoll im Ausgabefenster „TcFormatter“).
+
+Alle Befehle stehen außerdem im Menü **Extras → TcFormatter**:
 
 | Befehl | Wirkung | Tastenkürzel |
 |---|---|---|
