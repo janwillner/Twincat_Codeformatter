@@ -146,6 +146,12 @@ namespace TcFormatter.Formatting
         [Category("3 Spacing"), Description("Insert a space after '//' when the comment starts with a letter or digit.")]
         public bool SpaceAfterLineCommentStart { get; set; } = true;
 
+        [Category("3 Spacing"), Description("Text at the end of lines of multi-line comments that is aligned at CommentLineEndMarkerColumn, e.g. '<br>' in help headers. Empty = off.")]
+        public string CommentLineEndMarker { get; set; } = "";
+
+        [Category("3 Spacing"), Description("Column (1-based, tabs count as IndentSize) of CommentLineEndMarker; longer lines move the marker to the next tab stop (or one space further). With AlignWithTabs the gap is filled with tabs. 0 = off. Example: tab stop 37 with tab width 4 = 149.")]
+        public int CommentLineEndMarkerColumn { get; set; } = 0;
+
         [Category("3 Spacing"), Description("Minimum spaces between code and a trailing comment.")]
         public int SpacesBeforeTrailingComment { get; set; } = 1;
 

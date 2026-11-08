@@ -69,7 +69,20 @@ namespace TcFormatter.Formatting
 
         public string Run()
         {
-            var tokens = Lexer.Tokenize(_source);
+            var tokens = Lexer.Tokenize(_source).ToList();
+            if (CommentLineEndMarkers.Enabled(_o))
+            {
+                for (int i = 0; i < tokens.Count; i++)
+                {
+                    var t = tokens[i];
+                    if (t.Kind != TokenKind.BlockComment)
+                        continue;
+                    bool atLineStart = i == 0 || tokens[i - 1].Kind == TokenKind.Newline;
+                    string aligned = CommentLineEndMarkers.Align(t.Text, _o, atLineStart);
+                    if (!ReferenceEquals(aligned, t.Text))
+                        tokens[i] = new Token(t.Kind, aligned, t.Position);
+                }
+            }
             if (tokens.All(t => t.IsTrivia))
                 return _source.Trim().Length == 0 ? string.Empty : _source;
 

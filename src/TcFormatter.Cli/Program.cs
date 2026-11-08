@@ -51,6 +51,15 @@ public static class Program
             try { Console.OutputEncoding = new UTF8Encoding(false); }
             catch (IOException) { }
         }
+        // 'stdin' reads and writes UTF-8 like the TwinCAT files (the console code page would turn '¦' into two
+        // characters and shift every column behind it)
+        if (args.Length > 0 && args[0] == "stdin")
+        {
+            var utf8 = new UTF8Encoding(false);
+            var input = new StreamReader(Console.OpenStandardInput(), utf8);
+            var output = new StreamWriter(Console.OpenStandardOutput(), utf8) { AutoFlush = true };
+            return Run(args, input, output, Console.Error);
+        }
         return Run(args, Console.In, Console.Out, Console.Error);
     }
 

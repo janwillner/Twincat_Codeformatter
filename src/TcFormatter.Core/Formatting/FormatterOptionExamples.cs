@@ -37,6 +37,7 @@ namespace TcFormatter.Formatting
             public string Code;
             public Action<FormatterOptions> Prepare;
             public int[] IntAlternatives;
+            public string[] StringAlternatives;
             public bool ShowLineEnds;
         }
 
@@ -115,6 +116,10 @@ namespace TcFormatter.Formatting
             D(nameof(FormatterOptions.SpaceBeforeColon), "VAR\nnCount:INT;\nEND_VAR");
             D(nameof(FormatterOptions.SpaceAfterColon), "VAR\nnCount:INT;\nEND_VAR");
             I(nameof(FormatterOptions.SpaceAfterLineCommentStart), "nCount := 1; //start value");
+            const string header = "(*\nDESCRIPTION:<br>\nMotor control\t\t<br>\n*)\nFUNCTION_BLOCK FB_Motor\nVAR\nEND_VAR";
+            D(nameof(FormatterOptions.CommentLineEndMarker), header, o => o.CommentLineEndMarkerColumn = 25);
+            Examples[nameof(FormatterOptions.CommentLineEndMarker)].StringAlternatives = new[] { "<br>" };
+            D(nameof(FormatterOptions.CommentLineEndMarkerColumn), header, o => o.CommentLineEndMarker = "<br>", ints: 25);
             I(nameof(FormatterOptions.SpacesBeforeTrailingComment), "nCount := 1; // start value", ints: 4);
             I(nameof(FormatterOptions.SpaceBetweenNestedParentheses), "nSum := ((a + b) * c);", o => o.SpaceInsideParentheses = true);
 
@@ -244,6 +249,15 @@ namespace TcFormatter.Formatting
                 if (distinct.Count == 0)
                     distinct.Add((int)value + 1);
                 others = distinct.Cast<object>();
+            }
+            else if (property.PropertyType == typeof(string))
+            {
+                // the example's value and the default (empty = off)
+                var candidates = new List<string>();
+                if (Examples.TryGetValue(option, out var e) && e.StringAlternatives != null)
+                    candidates.AddRange(e.StringAlternatives);
+                candidates.Add((string)property.GetValue(new FormatterOptions()) ?? string.Empty);
+                others = candidates.Where(v => v != (string)value).Distinct().Cast<object>();
             }
             else
                 yield break;

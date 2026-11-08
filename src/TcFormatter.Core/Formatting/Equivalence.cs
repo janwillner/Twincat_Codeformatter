@@ -18,8 +18,8 @@ namespace TcFormatter.Formatting
         public static string FindDifference(string original, string formatted, FormatterOptions options)
         {
             bool semicolonMayChange = options != null && options.EndKeywordSemicolon != SemicolonStyle.Preserve;
-            var a = Normalize(original, semicolonMayChange);
-            var b = Normalize(formatted, semicolonMayChange);
+            var a = Normalize(original, semicolonMayChange, options);
+            var b = Normalize(formatted, semicolonMayChange, options);
             int n = System.Math.Min(a.Count, b.Count);
             for (int i = 0; i < n; i++)
             {
@@ -31,7 +31,7 @@ namespace TcFormatter.Formatting
             return null;
         }
 
-        private static List<string> Normalize(string text, bool ignoreEndSemicolons)
+        private static List<string> Normalize(string text, bool ignoreEndSemicolons, FormatterOptions options)
         {
             var result = new List<string>();
             string previousKeyword = null;
@@ -44,13 +44,13 @@ namespace TcFormatter.Formatting
                     continue;
                 }
 
-                result.Add(token.Kind + ":" + Key(token));
+                result.Add(token.Kind + ":" + Key(token, options));
                 previousKeyword = token.Kind == TokenKind.Keyword ? token.Text : null;
             }
             return result;
         }
 
-        private static string Key(Token token)
+        private static string Key(Token token, FormatterOptions options)
         {
             switch (token.Kind)
             {
@@ -67,7 +67,9 @@ namespace TcFormatter.Formatting
                         comment = "//" + comment.Substring(3);
                     return comment;
                 case TokenKind.BlockComment:
-                    return Regex.Replace(token.Text, "\r\n|\r", "\n");
+                    // the whitespace around line end markers like "<br>" may change (CommentLineEndMarker)
+                    string block = options == null ? token.Text : CommentLineEndMarkers.Normalize(token.Text, options);
+                    return Regex.Replace(block, "\r\n|\r", "\n");
                 default:
                     // identifiers, strings, pragmas, unknown characters: exact
                     return token.Text;

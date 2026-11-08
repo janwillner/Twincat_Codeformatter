@@ -21,6 +21,9 @@
     "declarationCommentColumn": 53,
     // initializers follow the type directly: "dn_CntInit : DINT := 0;"
     "alignDeclarationInitializers": false,
+    // help header: the "<br>" at the end of each line sits at tab 37 (column 149, end of the ---- lines)
+    "commentLineEndMarker": "<br>",
+    "commentLineEndMarkerColumn": 149,
 
     // ------------------------------------------------------------ blank lines
     // two blank lines before section header comments, blank lines at block start / end are kept
