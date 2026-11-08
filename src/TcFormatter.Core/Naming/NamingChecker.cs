@@ -351,6 +351,9 @@ namespace TcFormatter.Naming
                 string marker = methodLocal ? _rules.MethodLocalMarker ?? string.Empty : string.Empty;
 
                 var accepted = typePrefixes.Select(p => scope + p + marker).ToList();
+                // nothing configured for this variable (empty type, scope and marker prefix): not checked
+                if (accepted.Any(string.IsNullOrEmpty))
+                    return;
                 if (constant && !string.IsNullOrEmpty(_rules.ConstantPrefix))
                     accepted.Add(scope + _rules.ConstantPrefix);
 
@@ -561,31 +564,29 @@ namespace TcFormatter.Naming
                 bool member = kind == "METHOD" || kind == "PROPERTY" || kind == "ACTION";
                 string kindName = KindNames.TryGetValue(kind, out var k) ? k : kind;
 
-                if (member && string.IsNullOrEmpty(prefix))
-                {
-                    if (SystemMethods.Contains(name))
-                        return;
-                    var severity = _rules.SeverityOf(NamingRuleIds.MemberName);
-                    if (severity == NamingSeverity.Off)
-                        return;
-                    bool upper = char.IsUpper(name[0]);
-                    bool underscore = !_rules.AllowUnderscoreInMemberNames && name.IndexOf('_') >= 0;
-                    if (upper && !underscore)
-                        return;
-                    string suggestion = MemberSuggestion(name);
-                    Report(NamingRuleIds.MemberName, severity, name, line, column,
-                        $"{kindName} '{name}' should be PascalCase without prefix or underscores (e.g. '{suggestion}').", suggestion);
+                // no prefix configured for this kind: nothing to check
+                if (string.IsNullOrEmpty(prefix) || (member && SystemMethods.Contains(name)))
                     return;
-                }
 
-                if (string.IsNullOrEmpty(prefix))
-                    return;
-                var sev = _rules.SeverityOf(NamingRuleIds.ObjectPrefix);
-                if (sev == NamingSeverity.Off)
-                    return;
                 bool ok = name.StartsWith(prefix, StringComparison.Ordinal) && name.Length > prefix.Length &&
                           (!_rules.RequirePascalCaseAfterPrefix || char.IsUpper(name[prefix.Length]) || char.IsDigit(name[prefix.Length]));
                 if (ok)
+                {
+                    // methods, properties and actions: no further '_' after the prefix ("m_Start_Axis")
+                    string rest = name.Substring(prefix.Length);
+                    var memberSeverity = _rules.SeverityOf(NamingRuleIds.MemberName);
+                    if (member && !_rules.AllowUnderscoreInMemberNames && rest.IndexOf('_') >= 0 && memberSeverity != NamingSeverity.Off)
+                    {
+                        string joined = prefix + string.Concat(rest.Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
+                        Report(NamingRuleIds.MemberName, memberSeverity, name, line, column,
+                            $"{kindName} '{name}' should not contain '_' after the prefix '{prefix}' (e.g. '{joined}').", joined);
+                    }
+                    return;
+                }
+
+                var sev = _rules.SeverityOf(NamingRuleIds.ObjectPrefix);
+                if (sev == NamingSeverity.Off)
                     return;
                 string body = StripObjectPrefix(name);
                 string suggest = prefix + (body.Length > 0 ? char.ToUpperInvariant(body[0]) + body.Substring(1) : body);
@@ -602,15 +603,6 @@ namespace TcFormatter.Naming
                 if (underscore > 0 && underscore <= 4 && underscore < name.Length - 1)
                     return name.Substring(underscore + 1);
                 return name;
-            }
-
-            private static string MemberSuggestion(string name)
-            {
-                var parts = name.Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries).ToList();
-                // drop a short lower/upper prefix like "M_" or "P_"
-                if (parts.Count > 1 && parts[0].Length <= 2)
-                    parts.RemoveAt(0);
-                return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1)));
             }
 
             private void CheckEnumValue(Token value)

@@ -80,13 +80,16 @@ public class TcFileProcessorTests
     [Fact]
     public void Lints_all_objects_of_the_file_with_their_path()
     {
-        var result = TcFileProcessor.Process(Pou, Config(), format: false, lint: true);
+        var config = Config();
+        config.Naming.ObjectPrefixes["METHOD"] = "m_";
+        config.Naming.ObjectPrefixes["ACTION"] = "act_";
+        var result = TcFileProcessor.Process(Pou, config, format: false, lint: true);
 
         Assert.False(result.Changed);
         Assert.Equal(Pou, result.Text);
         Assert.Contains(result.Naming, n => n.ObjectPath == "FB_Motor" && n.Diagnostic.Name == "Speed" && n.Diagnostic.RuleId == NamingRuleIds.VariablePrefix);
-        Assert.Contains(result.Naming, n => n.ObjectPath == "FB_Motor.M_Start" && n.Diagnostic.RuleId == NamingRuleIds.MemberName);
-        Assert.Contains(result.Naming, n => n.ObjectPath == "FB_Motor.a_reset" && n.Diagnostic.RuleId == NamingRuleIds.MemberName);
+        Assert.Contains(result.Naming, n => n.ObjectPath == "FB_Motor.M_Start" && n.Diagnostic.RuleId == NamingRuleIds.ObjectPrefix);
+        Assert.Contains(result.Naming, n => n.ObjectPath == "FB_Motor.a_reset" && n.Diagnostic.RuleId == NamingRuleIds.ObjectPrefix);
     }
 
     [Fact]

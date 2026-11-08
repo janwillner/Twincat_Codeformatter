@@ -110,12 +110,40 @@ public class NamingCheckerTests
     }
 
     [Fact]
-    public void Methods_and_properties_use_plain_pascal_case()
+    public void Members_without_a_configured_prefix_are_not_checked()
     {
         Assert.Empty(Check("METHOD Start : BOOL\nVAR_INPUT\n    fSpeed : LREAL;\nEND_VAR"));
-        Assert.Empty(Check("METHOD FB_init : BOOL\nVAR_INPUT\n    bInitRetains : BOOL;\n    bInCopyCode : BOOL;\nEND_VAR"));
-        Assert.Equal(NamingRuleIds.MemberName, Assert.Single(Check("METHOD M_Start : BOOL")).RuleId);
-        Assert.Equal(NamingRuleIds.MemberName, Assert.Single(Check("PROPERTY PUBLIC speed : LREAL")).RuleId);
+        Assert.Empty(Check("METHOD M_Start : BOOL"));
+        Assert.Empty(Check("PROPERTY PUBLIC speed : LREAL"));
+        Assert.Empty(NamingChecker.CheckObjectName("act_SuList", "ACTION", new NamingRules()));
+    }
+
+    [Fact]
+    public void Members_with_a_prefix_need_it_and_no_further_underscores()
+    {
+        static void MethodPrefix(NamingRules r) => r.ObjectPrefixes["METHOD"] = "m_";
+
+        Assert.Empty(Check("METHOD m_Start : BOOL", MethodPrefix));
+        Assert.Empty(Check("METHOD FB_init : BOOL\nVAR_INPUT\n    bInitRetains : BOOL;\n    bInCopyCode : BOOL;\nEND_VAR", MethodPrefix));
+
+        var missing = Assert.Single(Check("METHOD Start : BOOL", MethodPrefix));
+        Assert.Equal((NamingRuleIds.ObjectPrefix, "m_Start"), (missing.RuleId, missing.Suggestion));
+
+        var underscore = Assert.Single(Check("METHOD m_Start_Axis : BOOL", MethodPrefix));
+        Assert.Equal((NamingRuleIds.MemberName, "m_StartAxis"), (underscore.RuleId, underscore.Suggestion));
+        Assert.Empty(Check("METHOD m_Start_Axis : BOOL", r => { MethodPrefix(r); r.AllowUnderscoreInMemberNames = true; }));
+    }
+
+    [Fact]
+    public void Variables_are_only_checked_against_configured_prefixes()
+    {
+        // empty type prefix and no scope prefix: nothing to check
+        Assert.Empty(Check("VAR\n    data : TFoo;\nEND_VAR", r => r.TypePrefixes["T*"] = ""));
+        Assert.Empty(Check("VAR\n    values : ARRAY[1..2] OF INT;\nEND_VAR", r => r.ArrayPrefix = ""));
+
+        // the scope prefix alone is still required
+        var d = Assert.Single(Check("VAR_INPUT\n    data : TFoo;\nEND_VAR", r => { r.TypePrefixes["T*"] = ""; r.ScopePrefixes["VAR_INPUT"] = "vi_"; }));
+        Assert.Equal("vi_Data", d.Suggestion);
     }
 
     [Fact]

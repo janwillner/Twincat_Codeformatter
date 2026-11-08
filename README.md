@@ -128,9 +128,13 @@ als `[CRLF]` / `[LF]`.
 |---|---|---|
 | TCN001 | Objektpräfix | `FB_`, `F_`, `P_` (MAIN ausgenommen), `I_`, `ST_`, `E_`, `U_`, `T_`, `GVL_` |
 | TCN002 | Variablenpräfix nach Datentyp (+ optional Bereich/Konstante) | `b` BOOL, `n`/`i` Ganzzahlen, `f` REAL, `s` STRING, `ws` WSTRING, `t` TIME, `d` DATE, `dt` DT, `tod` TOD, `a` ARRAY, `p` POINTER, `ref` REFERENCE, `fb` FBs (TON, R_TRIG, FB_*, MC_*), `st` ST_*, `e` E_*, `i`/`ip` I_*, `c` Konstanten |
-| TCN003 | Methoden, Properties, Aktionen | PascalCase ohne Präfix/Unterstrich |
+| TCN003 | Methoden, Properties, Aktionen | kein `_` nach dem eingestellten Präfix (`m_Start_Axis`) |
 | TCN004 | Enum-Werte | `enumValueCase`: PascalCase (Standard), UpperCase oder Any |
 | TCN005 | ungültige Bezeichner | `__`, führender `_` (erlaubbar mit `allowLeadingUnderscore`), Nicht-ASCII |
+
+Leere Einträge werden nicht geprüft: Ein leeres Objektpräfix (z. B. `"ACTION": ""`) lässt Namen dieser Objektart
+unbeachtet. Eine Variable wird nur geprüft, wenn sich aus Bereichs-, Typ- und Array-Präfix zusammen ein Präfix
+ergibt (z. B. `"T*": ""` ohne Bereichspräfix = DUT-Variablen werden nicht geprüft).
 
 Weitere Einstellungen:
 - Arrays und Pointer können zusätzlich das Präfix des Elementtyps verlangen (`abFlags`, `pnValue`).

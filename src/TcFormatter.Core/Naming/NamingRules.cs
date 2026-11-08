@@ -27,7 +27,7 @@ namespace TcFormatter.Naming
         /// <summary>Variable prefix derived from data type and scope (b, n, f, ...).</summary>
         public const string VariablePrefix = "TCN002";
 
-        /// <summary>Method and property names (PascalCase without prefix by default).</summary>
+        /// <summary>Method, property and action names: no '_' after their configured prefix.</summary>
         public const string MemberName = "TCN003";
 
         /// <summary>Enum values (PascalCase by default).</summary>
@@ -47,7 +47,7 @@ namespace TcFormatter.Naming
         public bool Enabled { get; set; } = true;
 
         /// <summary>Severity per rule id (see <see cref="NamingRuleIds"/>). Missing ids use <see cref="DefaultSeverity"/>.</summary>
-        [Category("1 General"), Description("Severity per rule: TCN001 object prefix, TCN002 variable prefix, TCN003 method/property name, TCN004 enum value, TCN005 invalid identifier. Values: Off, Info, Warning, Error.")]
+        [Category("1 General"), Description("Severity per rule: TCN001 object prefix, TCN002 variable prefix, TCN003 '_' in method/property/action names, TCN004 enum value, TCN005 invalid identifier. Values: Off, Info, Warning, Error.")]
         public Dictionary<string, NamingSeverity> Severities { get; set; } = new Dictionary<string, NamingSeverity>(StringComparer.OrdinalIgnoreCase);
 
         [Category("1 General"), Description("Severity of rules without an entry in 'severities'.")]
@@ -58,7 +58,7 @@ namespace TcFormatter.Naming
         /// Values may list alternatives separated by ',' (e.g. "n,i"). Exact keys win over wildcard keys;
         /// wildcard keys are tried in order of insertion.
         /// </summary>
-        [Category("2 Variables"), Description("Variable prefix per data type. '*' is a wildcard (e.g. FB_*), alternatives are separated by ',' (e.g. n,i). Unknown types are not checked.")]
+        [Category("2 Variables"), Description("Variable prefix per data type. '*' is a wildcard (e.g. FB_*), alternatives are separated by ',' (e.g. n,i). Unknown types and empty prefixes are not checked.")]
         public Dictionary<string, string> TypePrefixes { get; set; } = DefaultTypePrefixes();
 
         [Category("2 Variables"), Description("Prefix of ARRAY variables.")]
@@ -99,7 +99,7 @@ namespace TcFormatter.Naming
         public Dictionary<string, string> ScopePrefixes { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Object name prefix per object kind. Empty string = no prefix required.</summary>
-        [Category("3 Objects"), Description("Name prefix per object kind (FUNCTION_BLOCK, FUNCTION, PROGRAM, INTERFACE, STRUCT, ENUM, UNION, ALIAS, GVL, METHOD, PROPERTY, ACTION). Empty = PascalCase without prefix.")]
+        [Category("3 Objects"), Description("Name prefix per object kind (FUNCTION_BLOCK, FUNCTION, PROGRAM, INTERFACE, STRUCT, ENUM, UNION, ALIAS, GVL, METHOD, PROPERTY, ACTION). Empty = not checked.")]
         public Dictionary<string, string> ObjectPrefixes { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["FUNCTION_BLOCK"] = "FB_",
@@ -121,7 +121,7 @@ namespace TcFormatter.Naming
         public bool RequirePascalCaseAfterPrefix { get; set; } = true;
 
         /// <summary>Methods, properties and actions: allow '_' inside the name.</summary>
-        [Category("3 Objects"), Description("Allow '_' in method, property and action names.")]
+        [Category("3 Objects"), Description("Allow '_' in method, property and action names after their prefix (only with a configured prefix).")]
         public bool AllowUnderscoreInMemberNames { get; set; }
 
         /// <summary>Enum values must start with an upper case letter.</summary>

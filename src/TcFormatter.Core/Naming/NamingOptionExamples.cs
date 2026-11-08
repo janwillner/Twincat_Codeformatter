@@ -17,6 +17,9 @@ namespace TcFormatter.Naming
         {
             public string Code;
             public (string Label, Action<NamingRules> Change)[] Alternatives;
+
+            /// <summary>Settings the example needs besides the shown option (e.g. a method prefix).</summary>
+            public Action<NamingRules> Prepare;
         }
 
         private static readonly Dictionary<string, Example> Examples = new Dictionary<string, Example>(StringComparer.OrdinalIgnoreCase);
@@ -54,7 +57,8 @@ namespace TcFormatter.Naming
             Add(nameof(NamingRules.ObjectPrefixes), "FUNCTION_BLOCK Motor\nVAR\nbOn : BOOL;\nEND_VAR",
                 Alt("objectPrefixes: { \"FUNCTION_BLOCK\": \"FB\" }", r => r.ObjectPrefixes["FUNCTION_BLOCK"] = "FB"));
             Add(nameof(NamingRules.RequirePascalCaseAfterPrefix), "FUNCTION_BLOCK FB_motor\nVAR\nbOn : BOOL;\nEND_VAR");
-            Add(nameof(NamingRules.AllowUnderscoreInMemberNames), "METHOD Start_Axis : BOOL\nVAR_INPUT\nbExecute : BOOL;\nEND_VAR");
+            Add(nameof(NamingRules.AllowUnderscoreInMemberNames), "METHOD m_Start_Axis : BOOL\nVAR_INPUT\nbExecute : BOOL;\nEND_VAR");
+            Examples[nameof(NamingRules.AllowUnderscoreInMemberNames)].Prepare = r => r.ObjectPrefixes["METHOD"] = "m_";
             Add(nameof(NamingRules.EnumValueCase), "TYPE E_Mode :\n(\nidle,\nRUNNING,\nAuto\n);\nEND_TYPE");
             Add(nameof(NamingRules.AllowLeadingUnderscore), "VAR\n_bBusy : BOOL;\nEND_VAR");
         }
@@ -73,6 +77,7 @@ namespace TcFormatter.Naming
                 return null;
             var example = Examples[option];
             var rules = (current ?? new NamingRules()).Clone();
+            example.Prepare?.Invoke(rules);
             var diagnostics = NamingChecker.Check(example.Code, rules)
                 .OrderBy(d => d.Line).ThenBy(d => d.Column).ToList();
 

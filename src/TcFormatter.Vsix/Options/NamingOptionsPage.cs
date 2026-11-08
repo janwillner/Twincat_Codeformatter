@@ -78,7 +78,7 @@ namespace TcFormatter.Vsix.Options
         public NamingSeverity DefaultSeverity { get => Rules.DefaultSeverity; set => Rules.DefaultSeverity = value; }
 
         [Category("1 General"), DisplayName("Severities")]
-        [Description("One 'RULE = Severity' per line. TCN001 object prefix, TCN002 variable prefix, TCN003 method/property name, TCN004 enum value, TCN005 invalid identifier. Severity: Off, Info, Warning, Error.")]
+        [Description("One 'RULE = Severity' per line. TCN001 object prefix, TCN002 variable prefix, TCN003 '_' in method/property/action names, TCN004 enum value, TCN005 invalid identifier. Severity: Off, Info, Warning, Error.")]
         [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor)), TypeConverter(typeof(MultilineListConverter))]
         public string Severities
         {
@@ -112,7 +112,7 @@ namespace TcFormatter.Vsix.Options
         }
 
         [Category("2 Variables"), DisplayName("Type prefixes")]
-        [Description("One 'TYPE = prefix' per line. '*' is a wildcard (FB_* = fb), alternatives are separated by ',' (INT = n,i). Unknown types are not checked.")]
+        [Description("One 'TYPE = prefix' per line. '*' is a wildcard (FB_* = fb), alternatives are separated by ',' (INT = n,i). Unknown types and empty prefixes are not checked.")]
         [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor)), TypeConverter(typeof(MultilineListConverter))]
         public string TypePrefixes
         {
@@ -151,7 +151,7 @@ namespace TcFormatter.Vsix.Options
         public string ConstantPrefix { get => Rules.ConstantPrefix; set => Rules.ConstantPrefix = value ?? string.Empty; }
 
         [Category("3 Objects"), DisplayName("Object prefixes")]
-        [Description("One 'KIND = prefix' per line. Kinds: FUNCTION_BLOCK, FUNCTION, PROGRAM, INTERFACE, STRUCT, ENUM, UNION, ALIAS, GVL, METHOD, PROPERTY, ACTION. Empty prefix = PascalCase without prefix.")]
+        [Description("One 'KIND = prefix' per line. Kinds: FUNCTION_BLOCK, FUNCTION, PROGRAM, INTERFACE, STRUCT, ENUM, UNION, ALIAS, GVL, METHOD, PROPERTY, ACTION. Empty prefix = not checked.")]
         [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor)), TypeConverter(typeof(MultilineListConverter))]
         public string ObjectPrefixes
         {
