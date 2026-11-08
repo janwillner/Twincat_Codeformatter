@@ -99,3 +99,25 @@ public class StatementTests : FormatterTestBase
         Assert.Equal(StFormatter.Format(result.Text, CodePart.Implementation, Options()).Text, result.Text);
     }
 }
+
+public class SingleLineBlockTests : FormatterTestBase
+{
+    [Theory]
+    [InlineData("IF bStart THEN nCount := 1; END_IF")]
+    [InlineData("IF bA THEN nX := 1; ELSE nX := 2; END_IF")]
+    [InlineData("IF bA THEN nX := 1; ELSIF bB THEN nX := 2; END_IF")]
+    [InlineData("FOR i := 1 TO 3 DO nSum := nSum + i; END_FOR")]
+    [InlineData("WHILE bRun DO nCount := nCount + 1; END_WHILE")]
+    public void Keeps_single_line_blocks_intact_when_expanding_is_off(string input)
+    {
+        Assert.Equal(input, Impl(input, o => o.ExpandSingleLineBlocks = false));
+    }
+
+    [Fact]
+    public void Still_splits_statements_around_a_single_line_block()
+    {
+        Assert.Equal(
+            Lines("nA := 1;", "IF bStart THEN nCount := 1; END_IF", "nB := 2;"),
+            Impl("nA := 1; IF bStart THEN nCount := 1; END_IF nB := 2;", o => o.ExpandSingleLineBlocks = false));
+    }
+}

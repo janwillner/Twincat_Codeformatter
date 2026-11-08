@@ -99,4 +99,30 @@ public sealed class CliTests : IDisposable
         Assert.Equal(Program.UsageError, Run("format", "--nope").Exit);
         Assert.Equal(Program.UsageError, Run("format", Path.Combine(_dir, "missing")).Exit);
     }
+
+    [Fact]
+    public void Explain_lists_all_options()
+    {
+        var result = Run("explain");
+        Assert.Equal(Program.Ok, result.Exit);
+        Assert.Contains("spaceAroundOperators", result.Out);
+        Assert.Contains("typePrefixes", result.Out);
+    }
+
+    [Fact]
+    public void Explain_shows_before_and_after_for_every_value()
+    {
+        var result = Run("explain", "format.spaceAroundOperators");
+        Assert.Equal(Program.Ok, result.Exit);
+        Assert.Contains("nSum:=a+b*c;", result.Out);
+        Assert.Contains("nSum := a + b * c;", result.Out);
+        Assert.Contains("After with spaceAroundOperators = False", result.Out);
+        Assert.Contains("nSum := a+b*c;", result.Out);
+    }
+
+    [Fact]
+    public void Explain_rejects_unknown_options()
+    {
+        Assert.Equal(Program.UsageError, Run("explain", "noSuchOption").Exit);
+    }
 }

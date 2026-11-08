@@ -59,6 +59,18 @@ namespace TcFormatter.Vsix.Commands
             Add(service, DiagnoseMenusId, (arg, click) =>
             {
                 string file = Path.Combine(Path.GetTempPath(), "TcFormatter-menus.txt");
+                if (arg != null && arg.StartsWith("options", StringComparison.OrdinalIgnoreCase))
+                {
+                    // "options[:<format option>[:<naming option>]]": builds both option pages off screen, selects every
+                    // option once, writes a report and screenshots (no modal Tools > Options dialog needed)
+                    var parts = arg.Split(':');
+                    string report = Options.OptionPreviewDiagnostics.Run(
+                        Path.GetTempPath(),
+                        parts.Length > 1 ? parts[1] : "IndentStyle",
+                        parts.Length > 2 ? parts[2] : "TypePrefixes");
+                    _log.Write(report);
+                    return;
+                }
                 if (arg != null && arg.StartsWith("select:", StringComparison.OrdinalIgnoreCase))
                 {
                     // select a Solution Explorer node (path of captions separated by '/') and report what the

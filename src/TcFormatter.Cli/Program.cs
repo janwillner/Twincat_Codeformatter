@@ -24,6 +24,8 @@ public static class Program
           tcfmt init   [<directory>]         Write a .tcformat.json with all options and their defaults
           tcfmt import-stweep <file.stweep> [<directory>]
                                              Convert settings exported from STweep into a .tcformat.json
+          tcfmt explain [<option>]           List all options, or show a before/after example of one option
+                                             with the current configuration and its other values
 
         Options:
           --config <file>      Use this configuration instead of the nearest .tcformat.json
@@ -41,7 +43,16 @@ public static class Program
           --version            Print the version
         """;
 
-    public static int Main(string[] args) => Run(args, Console.In, Console.Out, Console.Error);
+    public static int Main(string[] args)
+    {
+        // the examples show tabs as '→'
+        if (args.Length > 0 && args[0] == "explain")
+        {
+            try { Console.OutputEncoding = new UTF8Encoding(false); }
+            catch (IOException) { }
+        }
+        return Run(args, Console.In, Console.Out, Console.Error);
+    }
 
     public static int Run(string[] args, TextReader stdin, TextWriter stdout, TextWriter stderr)
     {
@@ -67,6 +78,7 @@ public static class Program
                 "stdin" => Stdin(options, stdin, stdout, stderr),
                 "init" => Init(options, stdout, stderr),
                 "import-stweep" => ImportStweep(options, stdout, stderr),
+                "explain" => Explain(options, stdout, stderr),
                 _ => throw new UsageException($"Unknown command '{options.Command}'. Run 'tcfmt --help'."),
             };
         }
@@ -146,6 +158,90 @@ public static class Program
         }
         return Ok;
     }
+
+    private static int Explain(CliOptions options, TextWriter stdout, TextWriter stderr)
+    {
+        var config = LoadConfig(options, Directory.GetCurrentDirectory(), stderr);
+        if (options.Paths.Count == 0)
+        {
+            stdout.WriteLine("format options:");
+            foreach (var name in FormatterOptionExamples.Options)
+                stdout.WriteLine($"  {Camel(name),-44} {FormatterOptionExamples.Description(name)}");
+            stdout.WriteLine();
+            stdout.WriteLine("naming options:");
+            foreach (var name in NamingOptionExamples.Options)
+                stdout.WriteLine($"  {Camel(name),-44} {NamingOptionExamples.Description(name)}");
+            stdout.WriteLine();
+            stdout.WriteLine("Run 'tcfmt explain <option>' for a before/after example.");
+            return Ok;
+        }
+
+        // "format.indentSize", "naming.typePrefixes" or just the option name
+        string option = options.Paths[0];
+        int dot = option.IndexOf('.');
+        string? section = dot > 0 ? option.Substring(0, dot).ToLowerInvariant() : null;
+        if (dot > 0)
+            option = option.Substring(dot + 1);
+
+        if (section != "naming" && FormatterOptionExamples.Has(option))
+        {
+            var preview = FormatterOptionExamples.Preview(option, config.Format);
+            WriteExample(stdout, "format." + Camel(option), FormatterOptionExamples.Description(option),
+                CurrentValue(config.Format, option), preview);
+            foreach (var (label, alternative) in FormatterOptionExamples.DescribeAlternatives(option, config.Format))
+                WriteAlternative(stdout, label, FormatterOptionExamples.Preview(option, alternative).After);
+            return Ok;
+        }
+        if (section != "format" && NamingOptionExamples.Has(option))
+        {
+            var preview = NamingOptionExamples.Preview(option, config.Naming);
+            WriteExample(stdout, "naming." + Camel(option), NamingOptionExamples.Description(option),
+                CurrentValue(config.Naming, option), preview);
+            foreach (var (label, alternative) in NamingOptionExamples.DescribeAlternatives(option, config.Naming))
+                WriteAlternative(stdout, label, NamingOptionExamples.Preview(option, alternative).After);
+            return Ok;
+        }
+        throw new UsageException($"Unknown option '{options.Paths[0]}'. Run 'tcfmt explain' for the list.");
+    }
+
+    private static void WriteExample(TextWriter stdout, string name, string description, string value, OptionPreview preview)
+    {
+        stdout.WriteLine($"{name} = {value}");
+        stdout.WriteLine("  " + description);
+        stdout.WriteLine();
+        stdout.WriteLine("Before:");
+        stdout.WriteLine(Indent(preview.Before));
+        stdout.WriteLine();
+        stdout.WriteLine("After (current setting):");
+        stdout.WriteLine(Indent(preview.After));
+        if (preview.Error != null)
+            stdout.WriteLine("  error: " + preview.Error);
+    }
+
+    private static void WriteAlternative(TextWriter stdout, string label, string after)
+    {
+        stdout.WriteLine();
+        stdout.WriteLine($"After with {label}:");
+        stdout.WriteLine(Indent(after));
+    }
+
+    private static string Indent(string text) =>
+        string.Join(Environment.NewLine, text.Replace("\r\n", "\n").Split('\n').Select(line => "  | " + line));
+
+    private static string CurrentValue(object options, string option)
+    {
+        var value = options.GetType().GetProperty(option, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase)?.GetValue(options);
+        return value switch
+        {
+            null => "null",
+            string s => "\"" + s + "\"",
+            System.Collections.IDictionary d => "{ " + string.Join(", ", d.Keys.Cast<object>().Take(6).Select(k => $"{k}: {d[k]}")) + (d.Count > 6 ? ", ..." : "") + " }",
+            System.Collections.IEnumerable e => "[ " + string.Join(", ", e.Cast<object>()) + " ]",
+            _ => value.ToString() ?? string.Empty,
+        };
+    }
+
+    private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name.Substring(1);
 
     internal static TcFormatConfig LoadConfig(CliOptions options, string directory, TextWriter stderr)
     {

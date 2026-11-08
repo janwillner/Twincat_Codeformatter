@@ -24,6 +24,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# the elevated copy of this script starts in System32: pass an absolute path on
+if (-not [System.IO.Path]::IsPathRooted($Vsix)) {
+    $Vsix = Join-Path (Get-Location).Path $Vsix
+}
+
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Vsix', "`"$Vsix`"")

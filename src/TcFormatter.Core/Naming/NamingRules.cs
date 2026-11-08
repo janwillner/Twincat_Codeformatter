@@ -142,6 +142,19 @@ namespace TcFormatter.Naming
             "VAR", "VAR_INPUT", "VAR_OUTPUT", "VAR_IN_OUT", "VAR_GLOBAL", "VAR_TEMP", "VAR_STAT", "VAR_INST", "STRUCT",
         };
 
+        /// <summary>Deep copy (dictionaries and lists are copied too).</summary>
+        public NamingRules Clone()
+        {
+            var copy = (NamingRules)MemberwiseClone();
+            copy.Severities = Severities == null ? null : new Dictionary<string, NamingSeverity>(Severities, StringComparer.OrdinalIgnoreCase);
+            copy.TypePrefixes = TypePrefixes == null ? null : new Dictionary<string, string>(TypePrefixes, StringComparer.OrdinalIgnoreCase);
+            copy.ScopePrefixes = ScopePrefixes == null ? null : new Dictionary<string, string>(ScopePrefixes, StringComparer.OrdinalIgnoreCase);
+            copy.ObjectPrefixes = ObjectPrefixes == null ? null : new Dictionary<string, string>(ObjectPrefixes, StringComparer.OrdinalIgnoreCase);
+            copy.IgnoreNames = IgnoreNames == null ? null : new List<string>(IgnoreNames);
+            copy.CheckedSections = CheckedSections == null ? null : new List<string>(CheckedSections);
+            return copy;
+        }
+
         public NamingSeverity SeverityOf(string ruleId) =>
             Severities != null && Severities.TryGetValue(ruleId, out var s) ? s : DefaultSeverity;
 

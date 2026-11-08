@@ -491,12 +491,16 @@ namespace TcFormatter.Formatting
             return false;
         }
 
+        /// <summary>Blocks opened on the current line that are kept on it (ExpandSingleLineBlocks off).</summary>
+        private int _inlineBlocks;
+
         private void WalkTokens(List<Line> lines, int index, int lineLevel, int caseLabelColon)
         {
             var line = lines[index];
             var tokens = line.Tokens;
             bool opensBlock = false;
             bool maySplit = !line.Verbatim && !line.NoSplit;
+            _inlineBlocks = 0;
 
             for (int k = 0; k < tokens.Count; k++)
             {
@@ -553,7 +557,7 @@ namespace TcFormatter.Formatting
                                 _open = false;
                                 _conditionOpen = false;
                                 structural = true;
-                                if (_o.OneStatementPerLine)
+                                if (_o.OneStatementPerLine && _inlineBlocks == 0)
                                     splitAfter = k;
                             }
                             break;
@@ -643,6 +647,10 @@ namespace TcFormatter.Formatting
                     opensBlock = true;
                     if (expand)
                         splitAfter = k;
+                    else if (Top != null && Top.Kind == FrameKind.If && !Top.HeaderDone)
+                        _inlineBlocks++;
+                    if (Top != null && Top.Kind == FrameKind.If)
+                        Top.HeaderDone = true; // a later THEN belongs to an ELSIF
                     return true;
                 case "ELSIF":
                     _conditionOpen = true;
@@ -670,6 +678,8 @@ namespace TcFormatter.Formatting
                         opensBlock = true;
                         if (expand)
                             splitAfter = k;
+                            else
+                                _inlineBlocks++;
                         return true;
                     }
                     return false;
@@ -689,6 +699,8 @@ namespace TcFormatter.Formatting
                         opensBlock = true;
                         if (expand)
                             splitAfter = k;
+                            else
+                                _inlineBlocks++;
                         return true;
                     }
                     return false;
@@ -698,6 +710,8 @@ namespace TcFormatter.Formatting
                     opensBlock = true;
                     if (expand)
                         splitAfter = k;
+                        else
+                            _inlineBlocks++;
                     return true;
                 case "UNTIL":
                     _conditionOpen = true;
@@ -762,6 +776,8 @@ namespace TcFormatter.Formatting
                     opensBlock = true;
                     if (expand)
                         splitAfter = k;
+                        else
+                            _inlineBlocks++;
                     return true;
                 case "__CATCH":
                     // __CATCH(exc): the parenthesised exception variable belongs to the header
@@ -812,7 +828,9 @@ namespace TcFormatter.Formatting
             }
             if (hasSemicolon)
                 k++;
-            if (_o.ExpandSingleLineBlocks || _o.OneStatementPerLine)
+            if (_inlineBlocks > 0)
+                _inlineBlocks--;
+            if (_o.ExpandSingleLineBlocks || (_o.OneStatementPerLine && _inlineBlocks == 0))
                 splitAfter = k;
             return true;
         }

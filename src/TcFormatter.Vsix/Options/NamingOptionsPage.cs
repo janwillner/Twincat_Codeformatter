@@ -17,10 +17,34 @@ namespace TcFormatter.Vsix.Options
     public sealed class NamingOptionsPage : DialogPage
     {
         private NamingRulesView _view = new NamingRulesView(new NamingRules());
+        private OptionPreviewControl _control;
 
         public override object AutomationObject => _view;
 
-        public override void LoadSettingsFromStorage() => _view = new NamingRulesView(TcFormatConfig.LoadUser(out _).Naming);
+        protected override System.Windows.Forms.IWin32Window Window
+        {
+            get
+            {
+                if (_control == null)
+                {
+                    _control = new OptionPreviewControl(option => NamingOptionExamples.Preview(option, _view.Rules));
+                    _control.Bind(_view);
+                }
+                return _control;
+            }
+        }
+
+        protected override void OnActivate(CancelEventArgs e)
+        {
+            base.OnActivate(e);
+            _control?.Bind(_view);
+        }
+
+        public override void LoadSettingsFromStorage()
+        {
+            _view = new NamingRulesView(TcFormatConfig.LoadUser(out _).Naming);
+            _control?.Bind(_view);
+        }
 
         public override void SaveSettingsToStorage()
         {
@@ -29,7 +53,11 @@ namespace TcFormatter.Vsix.Options
             config.SaveTo(TcFormatConfig.UserConfigFile);
         }
 
-        public override void ResetSettings() => _view = new NamingRulesView(new NamingRules());
+        public override void ResetSettings()
+        {
+            _view = new NamingRulesView(new NamingRules());
+            _control?.Bind(_view);
+        }
     }
 
     /// <summary>
@@ -51,7 +79,7 @@ namespace TcFormatter.Vsix.Options
 
         [Category("1 General"), DisplayName("Severities")]
         [Description("One 'RULE = Severity' per line. TCN001 object prefix, TCN002 variable prefix, TCN003 method/property name, TCN004 enum value, TCN005 invalid identifier. Severity: Off, Info, Warning, Error.")]
-        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor))]
+        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor)), TypeConverter(typeof(MultilineListConverter))]
         public string Severities
         {
             get => string.Join(Environment.NewLine, Rules.Severities.Select(p => p.Key + " = " + p.Value));
@@ -68,7 +96,7 @@ namespace TcFormatter.Vsix.Options
         }
 
         [Category("1 General"), DisplayName("Ignored names"), Description("Regular expressions of names that are never reported, one per line.")]
-        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor))]
+        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor)), TypeConverter(typeof(MultilineListConverter))]
         public string IgnoreNames
         {
             get => string.Join(Environment.NewLine, Rules.IgnoreNames);
@@ -76,7 +104,7 @@ namespace TcFormatter.Vsix.Options
         }
 
         [Category("1 General"), DisplayName("Checked sections"), Description("Variable sections that are checked, one per line (VAR, VAR_INPUT, VAR_OUTPUT, VAR_IN_OUT, VAR_GLOBAL, VAR_TEMP, VAR_STAT, VAR_INST, STRUCT).")]
-        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor))]
+        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor)), TypeConverter(typeof(MultilineListConverter))]
         public string CheckedSections
         {
             get => string.Join(Environment.NewLine, Rules.CheckedSections);
@@ -85,7 +113,7 @@ namespace TcFormatter.Vsix.Options
 
         [Category("2 Variables"), DisplayName("Type prefixes")]
         [Description("One 'TYPE = prefix' per line. '*' is a wildcard (FB_* = fb), alternatives are separated by ',' (INT = n,i). Unknown types are not checked.")]
-        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor))]
+        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor)), TypeConverter(typeof(MultilineListConverter))]
         public string TypePrefixes
         {
             get => Table(Rules.TypePrefixes);
@@ -94,7 +122,7 @@ namespace TcFormatter.Vsix.Options
 
         [Category("2 Variables"), DisplayName("Scope prefixes")]
         [Description("One 'SECTION = prefix' per line, required before the type prefix, e.g. 'VAR_GLOBAL = g' gives gbStop.")]
-        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor))]
+        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor)), TypeConverter(typeof(MultilineListConverter))]
         public string ScopePrefixes
         {
             get => Table(Rules.ScopePrefixes);
@@ -124,7 +152,7 @@ namespace TcFormatter.Vsix.Options
 
         [Category("3 Objects"), DisplayName("Object prefixes")]
         [Description("One 'KIND = prefix' per line. Kinds: FUNCTION_BLOCK, FUNCTION, PROGRAM, INTERFACE, STRUCT, ENUM, UNION, ALIAS, GVL, METHOD, PROPERTY, ACTION. Empty prefix = PascalCase without prefix.")]
-        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor))]
+        [Editor(typeof(MultilineStringEditor), typeof(UITypeEditor)), TypeConverter(typeof(MultilineListConverter))]
         public string ObjectPrefixes
         {
             get => Table(Rules.ObjectPrefixes);
@@ -175,5 +203,31 @@ namespace TcFormatter.Vsix.Options
             (text ?? string.Empty).Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(l => l.Trim())
                 .Where(l => l.Length > 0);
+    }
+}
+
+namespace TcFormatter.Vsix.Options
+{
+    /// <summary>
+    /// Shows a multi-line table in a single grid cell as "A = 1; B = 2" and accepts that form when the cell is
+    /// edited directly (the "..." button opens the multi-line editor).
+    /// </summary>
+    public sealed class MultilineListConverter : StringConverter
+    {
+        private const string Separator = "; ";
+
+        public override object ConvertTo(ITypeDescriptorContext context, System.Globalization.CultureInfo culture, object value, Type destinationType)
+        {
+            if (destinationType == typeof(string) && value is string text)
+                return string.Join(Separator, text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries));
+            return base.ConvertTo(context, culture, value, destinationType);
+        }
+
+        public override object ConvertFrom(ITypeDescriptorContext context, System.Globalization.CultureInfo culture, object value)
+        {
+            if (value is string text && !text.Contains("\n"))
+                return string.Join(Environment.NewLine, text.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
+            return base.ConvertFrom(context, culture, value);
+        }
     }
 }

@@ -354,27 +354,33 @@ namespace TcFormatter.Naming
                 if (constant && !string.IsNullOrEmpty(_rules.ConstantPrefix))
                     accepted.Add(scope + _rules.ConstantPrefix);
 
+                // with AllowLeadingUnderscore a leading "_" is not part of the prefix: "_bBusy" is a valid BOOL name
+                string lead = _rules.AllowLeadingUnderscore ? new string('_', name.Text.Length - name.Text.TrimStart('_').Length) : string.Empty;
+                string text = name.Text.Substring(lead.Length);
+
                 // prefixes that may already be on the name and are replaced by a suggestion
                 var strippable = accepted.Concat(typePrefixes).Concat(typePrefixes.Select(p => scope + p))
                     .Where(p => !string.IsNullOrEmpty(p)).Distinct().OrderByDescending(p => p.Length).ToList();
 
                 bool constantUpper = constant && _rules.ConstantNameCase != NameCase.Any;
-                string matched = accepted.FirstOrDefault(p => HasPrefix(name.Text, p));
+                string matched = accepted.FirstOrDefault(p => HasPrefix(text, p));
                 if (matched != null)
                 {
-                    string body = name.Text.Substring(matched.Length);
+                    string body = text.Substring(matched.Length);
                     if (!constantUpper || MatchesCase(body, _rules.ConstantNameCase))
                         return;
-                    string fixedName = matched + ApplyCase(body, _rules.ConstantNameCase);
+                    string fixedName = lead + matched + ApplyCase(body, _rules.ConstantNameCase);
                     Report(NamingRuleIds.VariablePrefix, severity, name,
                         $"Constant '{name.Text}' should be written in {_rules.ConstantNameCase} after the prefix (e.g. '{fixedName}').", fixedName);
                     return;
                 }
 
-                string suggestion = Suggest(name.Text, accepted[0], strippable);
+                string suggestion = Suggest(text, accepted[0], strippable);
                 if (constantUpper)
                     suggestion = accepted[0] + ApplyCase(suggestion.Substring(accepted[0].Length), _rules.ConstantNameCase);
-                string typeText = string.Join(" ", type.Select(t => t.Text));
+                suggestion = lead + suggestion;
+                string typeText = string.Join(" ", type.Select(t => t.Text))
+                    .Replace(" [ ", "[").Replace(" ]", "]").Replace(" ( ", "(").Replace(" )", ")").Replace(" .. ", "..").Replace(" , ", ", ");
                 string expected = string.Join("' or '", accepted.Distinct());
                 Report(NamingRuleIds.VariablePrefix, severity, name,
                     $"Variable '{name.Text}' of type {typeText} should start with '{expected}'" +

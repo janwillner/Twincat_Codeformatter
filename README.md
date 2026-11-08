@@ -60,7 +60,11 @@ tcfmt lint    <pfad>...     Namensprüfung (MSBuild-Format, anklickbar), --json,
 tcfmt stdin --part impl     Text von stdin formatieren
 tcfmt init                  .tcformat.json mit allen Optionen und Beschreibungen anlegen
 tcfmt import-stweep <datei.stweep> [<ordner>]   STweep-Export in eine .tcformat.json umwandeln
+tcfmt explain [<option>]    alle Optionen auflisten bzw. Vorher/Nachher-Beispiel einer Option
 ```
+
+`tcfmt explain format.indentStyle` zeigt das Beispiel mit der aktuell gültigen Konfiguration und
+zusätzlich das Ergebnis für jeden anderen Wert der Option (Tabs werden als `→` dargestellt).
 
 Die CLI ändert nur den Inhalt der CDATA-Abschnitte; alles andere bleibt byte-identisch. Vor dem
 Formatieren von Dateien mit der CLI die Projektmappe in XAE schließen.
@@ -72,6 +76,13 @@ Gesucht wird in dieser Reihenfolge, wie bei Black:
 1. die nächstgelegene `.tcformat.json` vom Objekt (PLC-Projektordner) aus nach oben,
 2. die Benutzereinstellungen `%APPDATA%\TcFormatter\.tcformat.json` (*Extras → Optionen*),
 3. die eingebauten Standardwerte.
+
+**Vorher/Nachher-Beispiele:** Unter *Extras → Optionen → TcFormatter → Formatting* bzw. *Naming* zeigt
+jede Seite unter der Eigenschaftsliste ein kleines Codebeispiel zur ausgewählten Option. *Before* ist der
+Beispielcode, *After* das Ergebnis des echten Formatters (bzw. der echten Namensprüfung mit den
+vorgeschlagenen Namen und Meldungen) mit den Werten, die gerade in der Liste stehen. Jede Änderung ist
+dadurch sofort sichtbar, noch vor *OK*. Tabs erscheinen als `→`, Zeilenenden bei den Zeilenende-Optionen
+als `[CRLF]` / `[LF]`.
 
 `tcfmt init` schreibt eine vollständige Datei, in der jede Option kommentiert ist. Beispiel:
 
@@ -184,3 +195,8 @@ tests/                  xUnit-Tests inkl. Golden-Files aus dem TwinCAT-Testproje
 TestProject/            TwinCAT-Projekt zum Testen (formatiert, baut mit 0 Fehlern)
 lib/TCatSysManagerLib   Interop aus TypeLib 3.3 (eingebettet, kompatibel mit 4024 und 4026)
 ```
+
+Diagnose ohne modale Dialoge (z. B. über die TwinCAT-Automatisierung): `DTE.ExecuteCommand("TcFormatter.DiagnoseMenus", "options")`
+baut beide Optionsseiten unsichtbar auf, wählt jede Option einmal aus und schreibt
+`%TEMP%\TcFormatter-options.txt` sowie Screenshots `%TEMP%\TcFormatter-options-*.png`.
+`"select:<Pfad>|format"` simuliert einen Rechtsklick auf einen Knoten des Projektmappen-Explorers.
