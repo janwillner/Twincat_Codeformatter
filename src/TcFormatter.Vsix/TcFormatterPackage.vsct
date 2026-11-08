@@ -99,6 +99,14 @@
           <LocCanonicalName>.TcFormatter.Settings</LocCanonicalName>
         </Strings>
       </Button>
+      <Button guid="guidTcFormatterCmdSet" id="cmdImportStweep" priority="0x0115" type="Button">
+        <Parent guid="guidTcFormatterCmdSet" id="SettingsGroup" />
+        <Strings>
+          <ButtonText>Import STweep Settings...</ButtonText>
+          <CanonicalName>.TcFormatter.ImportStweepSettings</CanonicalName>
+          <LocCanonicalName>.TcFormatter.ImportStweepSettings</LocCanonicalName>
+        </Strings>
+      </Button>
       <!-- diagnostics only: available as DTE command / in the command window, not in a menu -->
       <Button guid="guidTcFormatterCmdSet" id="cmdDiagnoseMenus" priority="0x0120" type="Button">
         <Parent guid="guidTcFormatterCmdSet" id="SettingsGroup" />
@@ -155,6 +163,7 @@
       <IDSymbol name="cmdOpenConfig" value="0x0105" />
       <IDSymbol name="cmdOpenOptions" value="0x0106" />
       <IDSymbol name="cmdDiagnoseMenus" value="0x0107" />
+      <IDSymbol name="cmdImportStweep" value="0x0108" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

@@ -101,7 +101,7 @@ public class IndentationTests : FormatterTestBase
             "    IN := bStart,",
             "    PT := T#1S",
             ");",
-            "x := 1;"), Impl(input, o => o.RejoinWrappedCalls = false));
+            "x := 1;"), Impl(input, o => o.CallLineBreakMode = LineBreakMode.Preserve));
     }
 
     [Fact]

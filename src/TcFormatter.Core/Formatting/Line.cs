@@ -3,7 +3,7 @@ using TcFormatter.Lexing;
 
 namespace TcFormatter.Formatting
 {
-    internal enum FrameKind { If, Case, For, While, Repeat, Var, Struct, Union, Region, Try }
+    internal enum FrameKind { If, Case, For, While, Repeat, Var, Struct, Union, Region, Try, Type }
 
     internal sealed class Frame
     {
@@ -26,6 +26,14 @@ namespace TcFormatter.Formatting
 
         /// <summary>CASE: at least one label (or ELSE) was seen, so statements belong to a label body.</summary>
         public bool CaseInBody { get; set; }
+
+        /// <summary>CASE: the ELSE branch was reached.</summary>
+        public bool InElse { get; set; }
+
+        /// <summary>CASE: a branch (label or ELSE) has started; <see cref="BranchLines"/> counts its lines.</summary>
+        public bool BranchStarted { get; set; }
+
+        public int BranchLines { get; set; }
     }
 
     /// <summary>One logical output line (may contain a multi-line block comment).</summary>
@@ -36,7 +44,7 @@ namespace TcFormatter.Formatting
         /// <summary>Blank lines before this line in the source.</summary>
         public int BlankBefore { get; set; }
 
-        /// <summary>Line lies in a "tcfmt: off" region and is emitted exactly as in the source.</summary>
+        /// <summary>Line lies in a "tcfmt: off" / "STweep.Disable" region and is emitted exactly as in the source.</summary>
         public bool Verbatim { get; set; }
 
         /// <summary>Original text of the physical line (without line break).</summary>
@@ -69,5 +77,20 @@ namespace TcFormatter.Formatting
 
         /// <summary>Line is a statement of the implementation (not a continuation).</summary>
         public bool IsStatement { get; set; }
+
+        /// <summary>Line starts with TYPE (implicit enum candidate).</summary>
+        public bool IsTypeHeader { get; set; }
+
+        /// <summary>The line was joined from several source lines (a list that was already wrapped).</summary>
+        public bool WasMultiline { get; set; }
+
+        /// <summary>Do not split this line (simple IF kept on one line).</summary>
+        public bool NoSplit { get; set; }
+
+        /// <summary>Line starts a CASE branch (label or ELSE).</summary>
+        public bool IsCaseBranchStart { get; set; }
+
+        /// <summary>For branch starts: number of lines of the previous branch (-1 = first branch).</summary>
+        public int PreviousCaseBranchLines { get; set; } = -1;
     }
 }

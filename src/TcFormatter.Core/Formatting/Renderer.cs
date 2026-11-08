@@ -6,7 +6,10 @@ using TcFormatter.Lexing;
 
 namespace TcFormatter.Formatting
 {
-    /// <summary>Turns processed <see cref="Line"/>s into physical text lines: spacing, casing, alignment, wrapping.</summary>
+    /// <summary>
+    /// Turns processed <see cref="Line"/>s into physical text lines: spacing, casing, alignment, blank lines and
+    /// the layout of lists (calls, initializers, implicit enums).
+    /// </summary>
     internal sealed class Renderer
     {
         private static readonly HashSet<string> BinaryOperators = new HashSet<string>
@@ -32,6 +35,11 @@ namespace TcFormatter.Formatting
 
         private string Assign => _o.SpaceAroundAssignment ? " := " : ":=";
 
+        private int TabWidth => Math.Max(1, _o.IndentSize);
+
+        /// <summary>Columns are aligned with tabs on tab stops.</summary>
+        private bool TabAlign => _o.AlignWithTabs && _o.IndentStyle == IndentStyle.Tabs;
+
         private sealed class RLine
         {
             public Line Source;
@@ -49,7 +57,8 @@ namespace TcFormatter.Formatting
             public List<string> Wrapped;
             public int CommentColumn = -1;
 
-            public bool IsCommentOnly => Code.Count == 0;
+            /// <summary>The line contains only comments (they are then held in <see cref="Code"/>).</summary>
+            public bool IsCommentOnly => Code.Count == 0 || Code.All(t => t.IsComment);
         }
 
         private sealed class DeclParts
@@ -80,9 +89,9 @@ namespace TcFormatter.Formatting
                 rendered.Add(r);
             }
 
+            ApplyBlankLineMinimums(rendered);
             AlignDeclarations(rendered);
             AlignEnums(rendered);
-            WrapCalls(rendered);
             AlignAssignments(rendered);
             AlignCodeComments(rendered);
 
@@ -110,22 +119,153 @@ namespace TcFormatter.Formatting
         private int ComputeBlankLines(Line line, Line previous)
         {
             if (previous == null)
-                return 0;
+                return Math.Max(0, _o.BlankLinesAtFileStart);
             if (line.Verbatim && previous.Verbatim)
                 return line.BlankBefore;
-            int blank = Math.Min(line.BlankBefore, Math.Max(0, _o.MaxConsecutiveBlankLines));
+
+            int blank = _o.KeepExistingBlankLines ? Math.Min(line.BlankBefore, Math.Max(0, _o.MaxConsecutiveBlankLines)) : 0;
             if (_o.RemoveBlankLinesAtBlockStart && previous.OpensBlock && !previous.Verbatim)
                 blank = 0;
-            if (_o.RemoveBlankLinesAtBlockEnd && line.StartsWithCloser && !line.Verbatim)
+            if (_o.RemoveBlankLinesAtBlockEnd && line.StartsWithCloser && !line.Verbatim && !line.IsCaseBranchStart)
                 blank = 0;
+
+            if (line.IsCaseBranchStart && line.PreviousCaseBranchLines >= 1)
+            {
+                int wanted = line.PreviousCaseBranchLines == 1 ? _o.BlankLinesAfterSingleLineCase : _o.BlankLinesAfterMultiLineCase;
+                blank = Math.Max(blank, wanted);
+            }
             return blank;
+        }
+
+        // ------------------------------------------------------------------ blank line minimums around elements
+
+        private enum ElementKind { Other, Statement, StatementWithBody, EndOfBody, Comment, Declaration, EndVar }
+
+        private sealed class Element
+        {
+            public int Start;
+            public int End;
+            public ElementKind Kind;
+            public bool MultiLine;
+        }
+
+        private static readonly HashSet<string> BodyKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "IF", "CASE", "FOR", "WHILE", "REPEAT",
+        };
+
+        private static readonly HashSet<string> BodyEndKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "END_IF", "END_CASE", "END_FOR", "END_WHILE", "END_REPEAT",
+        };
+
+        /// <summary>
+        /// Applies the "blank lines before / after ..." minimums. A comment directly above an element belongs to it:
+        /// the element's "before" lines go above the comment.
+        /// </summary>
+        private void ApplyBlankLineMinimums(List<RLine> lines)
+        {
+            var elements = Elements(lines);
+            bool attached = false;
+            for (int i = 1; i < elements.Count; i++)
+            {
+                var e = elements[i];
+                var p = elements[i - 1];
+                var first = lines[e.Start];
+                if (first.Source.Verbatim || first.Source.StartsWithCloser || first.Source.IsCaseBranchStart ||
+                    lines[p.End].Source.OpensBlock || lines[p.End].Source.Verbatim)
+                {
+                    attached = false;
+                    continue;
+                }
+
+                int before = attached ? 0 : Before(e);
+                if (e.Kind == ElementKind.Comment && i + 1 < elements.Count)
+                {
+                    // the comment belongs to the following element when no blank line separates them
+                    var next = elements[i + 1];
+                    if (next.Kind != ElementKind.Comment && lines[next.Start].Blank == 0 && !lines[next.Start].Source.StartsWithCloser)
+                        before = Math.Max(before, Before(next));
+                }
+                attached = e.Kind == ElementKind.Comment;
+                int required = Math.Max(After(p), before);
+                if (required > first.Blank)
+                    first.Blank = required;
+            }
+        }
+
+        private int Before(Element e)
+        {
+            switch (e.Kind)
+            {
+                case ElementKind.StatementWithBody: return _o.BlankLinesBeforeStatementWithBody;
+                case ElementKind.Statement: return e.MultiLine ? _o.BlankLinesBeforeMultiLineStatement : _o.BlankLinesBeforeSingleLineStatement;
+                case ElementKind.Comment: return e.MultiLine ? _o.BlankLinesBeforeMultiLineComment : _o.BlankLinesBeforeSingleLineComment;
+                case ElementKind.Declaration: return e.MultiLine ? _o.BlankLinesBeforeMultiLineDeclaration : _o.BlankLinesBeforeSingleLineDeclaration;
+                default: return 0;
+            }
+        }
+
+        private int After(Element e)
+        {
+            switch (e.Kind)
+            {
+                case ElementKind.EndOfBody: return _o.BlankLinesAfterStatementWithBody;
+                case ElementKind.Statement: return e.MultiLine ? _o.BlankLinesAfterMultiLineStatement : _o.BlankLinesAfterSingleLineStatement;
+                case ElementKind.Comment: return e.MultiLine ? _o.BlankLinesAfterMultiLineComment : _o.BlankLinesAfterSingleLineComment;
+                case ElementKind.Declaration: return e.MultiLine ? _o.BlankLinesAfterMultiLineDeclaration : _o.BlankLinesAfterSingleLineDeclaration;
+                case ElementKind.EndVar: return _o.BlankLinesAfterVarBlocks;
+                default: return 0;
+            }
+        }
+
+        /// <summary>Splits the lines into elements: a line plus its continuation lines.</summary>
+        private List<Element> Elements(List<RLine> lines)
+        {
+            var result = new List<Element>();
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var r = lines[i];
+                var source = r.Source;
+                if (source.IsContinuation && result.Count > 0)
+                {
+                    result[result.Count - 1].End = i;
+                    result[result.Count - 1].MultiLine = true;
+                    continue;
+                }
+
+                var element = new Element { Start = i, End = i };
+                var firstToken = source.Tokens[0];
+                if (source.Verbatim)
+                    element.Kind = ElementKind.Other;
+                else if (r.IsCommentOnly && source.Tokens.All(t => t.IsComment))
+                {
+                    element.Kind = ElementKind.Comment;
+                    element.MultiLine = source.Tokens.Any(t => t.Text.IndexOf('\n') >= 0);
+                }
+                else if (firstToken.Kind == TokenKind.Keyword && BodyKeywords.Contains(firstToken.Text))
+                    element.Kind = ElementKind.StatementWithBody;
+                else if (firstToken.Kind == TokenKind.Keyword && BodyEndKeywords.Contains(firstToken.Text))
+                    element.Kind = ElementKind.EndOfBody;
+                else if (firstToken.IsKeyword("END_VAR"))
+                    element.Kind = ElementKind.EndVar;
+                else if (source.InDeclarationSection)
+                    element.Kind = ElementKind.Declaration;
+                else if (source.IsStatement && !source.IsCaseBranchStart && !source.StartsWithCloser)
+                    element.Kind = ElementKind.Statement;
+
+                if (r.Wrapped != null && r.Wrapped.Count > 1)
+                    element.MultiLine = true;
+                result.Add(element);
+            }
+            return result;
         }
 
         private void Prepare(RLine r)
         {
             var line = r.Source;
             r.Indent = IndentString(line.Indent);
-            r.IndentWidth = line.Indent * Math.Max(1, _o.IndentSize);
+            r.IndentWidth = line.Indent * TabWidth;
 
             int lastCode = line.Tokens.Count - 1;
             while (lastCode >= 0 && line.Tokens[lastCode].IsComment)
@@ -147,11 +287,15 @@ namespace TcFormatter.Formatting
                 string target = AssignmentTarget(line.StatementHead.Tokens);
                 if (target != null)
                 {
-                    int pad = target.Length + (_o.SpaceAroundAssignment ? 1 : 0);
+                    int pad = Visual(target) + (_o.SpaceAroundAssignment ? 1 : 0);
                     r.Indent = IndentString(line.StatementHead.Indent) + new string(' ', pad);
-                    r.IndentWidth = line.StatementHead.Indent * Math.Max(1, _o.IndentSize) + pad;
+                    r.IndentWidth = line.StatementHead.Indent * TabWidth + pad;
                 }
             }
+
+            r.Wrapped = LayoutList(r);
+            if (r.Wrapped != null)
+                return;
 
             if (line.InDeclarationSection)
                 r.Decl = ParseDeclaration(r.Code);
@@ -167,7 +311,7 @@ namespace TcFormatter.Formatting
                 return string.Empty;
             return _o.IndentStyle == IndentStyle.Tabs
                 ? new string('\t', levels)
-                : new string(' ', levels * Math.Max(1, _o.IndentSize));
+                : new string(' ', levels * TabWidth);
         }
 
         private string Compose(RLine r)
@@ -177,9 +321,48 @@ namespace TcFormatter.Formatting
                 return r.Indent + code;
             if (code.Length == 0)
                 return r.Indent + r.CommentText;
-            int column = r.CommentColumn >= 0 ? r.CommentColumn : r.IndentWidth + code.Length + Math.Max(1, _o.SpacesBeforeTrailingComment);
-            int pad = Math.Max(Math.Max(1, _o.SpacesBeforeTrailingComment), column - r.IndentWidth - code.Length);
-            return r.Indent + code + new string(' ', pad) + r.CommentText;
+            if (r.CommentColumn >= 0)
+            {
+                string padded = PadTo(code, r.IndentWidth, r.CommentColumn);
+                if (padded.Length == code.Length)
+                    padded += " ";
+                return r.Indent + padded + r.CommentText;
+            }
+            return r.Indent + code + new string(' ', Math.Max(1, _o.SpacesBeforeTrailingComment)) + r.CommentText;
+        }
+
+        // ------------------------------------------------------------------ columns
+
+        /// <summary>Visual width of <paramref name="s"/> starting at column <paramref name="start"/> (tabs expanded).</summary>
+        private int Visual(string s, int start = 0)
+        {
+            int col = start;
+            foreach (char c in s)
+                col = c == '\t' ? NextStop(col) : col + 1;
+            return col - start;
+        }
+
+        /// <summary>Next tab stop strictly right of <paramref name="column"/>.</summary>
+        private int NextStop(int column) => (column / TabWidth + 1) * TabWidth;
+
+        /// <summary>Column where aligned text starts after content of width <paramref name="width"/>.</summary>
+        private int AlignColumn(int width, int minimumGap) => TabAlign ? NextStop(width) : width + minimumGap;
+
+        /// <summary>Pads <paramref name="s"/> (which starts at <paramref name="startColumn"/>) up to <paramref name="target"/>.</summary>
+        private string PadTo(string s, int startColumn, int target)
+        {
+            int col = startColumn + Visual(s, startColumn);
+            if (TabAlign && target % TabWidth == 0)
+            {
+                var sb = new StringBuilder(s);
+                while (col < target)
+                {
+                    sb.Append('\t');
+                    col = NextStop(col);
+                }
+                return sb.ToString();
+            }
+            return s + new string(' ', Math.Max(0, target - col));
         }
 
         // ------------------------------------------------------------------ declarations
@@ -254,35 +437,45 @@ namespace TcFormatter.Formatting
                 int limit = _o.MaxAlignedNameLength;
                 bool Aligned(RLine r) => limit <= 0 || r.Decl.Names.Length <= limit;
 
-                int nameWidth = group.Where(Aligned).Select(r => r.Decl.Names.Length).DefaultIfEmpty(0).Max();
+                int nameWidth = group.Where(Aligned).Select(r => Visual(r.Decl.Names)).DefaultIfEmpty(0).Max();
                 string colon = (_o.SpaceBeforeColon ? " " : "") + ":" + (_o.SpaceAfterColon ? " " : "");
+                string tabColon = ":" + (_o.SpaceAfterColon ? " " : "");
 
                 var left = new Dictionary<RLine, string>();
                 foreach (var r in group)
                 {
-                    string names;
                     if (_o.DeclarationTypeColumn > 0)
                     {
                         // fixed column: the type starts at DeclarationTypeColumn (1-based); longer names push it right
                         int width = _o.DeclarationTypeColumn - 1 - r.IndentWidth - colon.Length;
-                        names = r.Decl.Names.PadRight(Math.Max(0, width));
+                        left[r] = r.Decl.Names.PadRight(Math.Max(0, width)) + colon + r.Decl.Type;
+                    }
+                    else if (!_o.AlignDeclarationColons || !Aligned(r))
+                    {
+                        left[r] = r.Decl.Names + colon + r.Decl.Type;
+                    }
+                    else if (TabAlign)
+                    {
+                        left[r] = PadTo(r.Decl.Names, 0, NextStop(nameWidth)) + tabColon + r.Decl.Type;
                     }
                     else
                     {
-                        names = _o.AlignDeclarationColons && Aligned(r) ? r.Decl.Names.PadRight(nameWidth) : r.Decl.Names;
+                        left[r] = r.Decl.Names.PadRight(nameWidth) + colon + r.Decl.Type;
                     }
-                    left[r] = names + colon + r.Decl.Type;
                 }
 
-                int leftWidth = group.Where(r => r.Decl.Init != null && Aligned(r)).Select(r => left[r].Length).DefaultIfEmpty(0).Max();
+                int leftWidth = group.Where(r => r.Decl.Init != null && Aligned(r)).Select(r => Visual(left[r])).DefaultIfEmpty(0).Max();
                 foreach (var r in group)
                 {
                     string text = left[r];
                     if (r.Decl.Init != null)
                     {
-                        if (_o.AlignDeclarationInitializers && Aligned(r))
-                            text = text.PadRight(leftWidth);
-                        text += Assign + r.Decl.Init;
+                        if (_o.AlignDeclarationInitializers && Aligned(r) && TabAlign)
+                            text = PadTo(text, 0, NextStop(leftWidth)) + ":=" + (_o.SpaceAroundAssignment ? " " : "") + r.Decl.Init;
+                        else if (_o.AlignDeclarationInitializers && Aligned(r))
+                            text = text.PadRight(leftWidth) + Assign + r.Decl.Init;
+                        else
+                            text += Assign + r.Decl.Init;
                     }
                     r.CodeText = text + ";";
                 }
@@ -292,7 +485,7 @@ namespace TcFormatter.Formatting
             }
         }
 
-        // ------------------------------------------------------------------ enums
+        // ------------------------------------------------------------------ enums (one value per source line)
 
         private EnumParts ParseEnum(List<Token> code)
         {
@@ -321,12 +514,24 @@ namespace TcFormatter.Formatting
                 {
                     string text = r.Enum.Name;
                     if (r.Enum.Value != null)
-                        text = (_o.AlignEnumValues ? text.PadRight(width) : text) + Assign + r.Enum.Value;
+                        text = AlignNamed(text, width, _o.AlignEnumValues, ":=", r.Enum.Value);
                     r.CodeText = text + (r.Enum.Comma ? "," : "");
                 }
                 if (_o.DeclarationCommentAlignment == TrailingCommentAlignment.AlignInBlock)
                     AlignComments(group);
             }
+        }
+
+        /// <summary>"name := value" with the operator aligned at <paramref name="nameWidth"/>.</summary>
+        private string AlignNamed(string name, int nameWidth, bool align, string op, string value)
+        {
+            string before = _o.SpaceAroundAssignment && _o.SpaceBeforeArgumentAssignment ? " " : "";
+            string after = _o.SpaceAroundAssignment ? " " : "";
+            if (!align)
+                return name + before + op + after + value;
+            if (TabAlign)
+                return PadTo(name, 0, NextStop(nameWidth)) + op + after + value;
+            return name.PadRight(nameWidth) + before + op + after + value;
         }
 
         // ------------------------------------------------------------------ statements
@@ -362,9 +567,13 @@ namespace TcFormatter.Formatting
                 return;
             foreach (var group in Groups(lines, r => r.AssignLeft != null && r.Wrapped == null, allowCommentLines: false))
             {
-                int width = group.Max(r => r.AssignLeft.Length);
+                int width = group.Max(r => Visual(r.AssignLeft));
                 foreach (var r in group)
-                    r.CodeText = r.AssignLeft.PadRight(width) + Assign + r.AssignRight;
+                {
+                    r.CodeText = TabAlign
+                        ? PadTo(r.AssignLeft, 0, NextStop(width)) + ":=" + (_o.SpaceAroundAssignment ? " " : "") + r.AssignRight
+                        : r.AssignLeft.PadRight(width) + Assign + r.AssignRight;
+                }
             }
         }
 
@@ -397,7 +606,8 @@ namespace TcFormatter.Formatting
             if (withComments.Count == 0)
                 return;
             // the comment column lies right of the widest code line of the whole block
-            int column = group.Where(r => !r.IsCommentOnly).Max(r => r.IndentWidth + r.CodeText.Length) + Math.Max(1, _o.SpacesBeforeTrailingComment);
+            int widest = group.Where(r => !r.IsCommentOnly).Max(r => r.IndentWidth + Visual(r.CodeText, r.IndentWidth));
+            int column = AlignColumn(widest, Math.Max(1, _o.SpacesBeforeTrailingComment));
             foreach (var r in withComments)
                 r.CommentColumn = column;
         }
@@ -444,39 +654,160 @@ namespace TcFormatter.Formatting
             }
         }
 
-        // ------------------------------------------------------------------ call wrapping
+        // ------------------------------------------------------------------ list layout (calls, initializers, enums)
 
-        private void WrapCalls(List<RLine> lines)
+        private sealed class ListSettings
         {
-            if (!_o.WrapLongCalls && _o.WrapCallsWithArgumentsAtLeast <= 0)
-                return;
-            foreach (var r in lines)
+            public LineBreakMode Mode;
+            public int MaxItems;
+            public bool BreakBeforeOpen;
+            public bool BreakAfterOpen = true;
+            public bool CloseOnOwnLine;
+            public bool AlignWithOpeningParenthesis;
+            public bool AlignNames;
+        }
+
+        private ListSettings SettingsFor(ListKind kind)
+        {
+            switch (kind)
             {
-                if (r.Source.Verbatim || !r.Source.IsStatement || r.Decl != null)
-                    continue;
-                var shape = CallShape.TryParse(r.Source.Tokens);
-                if (shape == null || shape.Arguments.Count == 0)
-                    continue;
-
-                bool tooLong = _o.WrapLongCalls && _o.MaxLineLength > 0 && r.IndentWidth + r.CodeText.Length > _o.MaxLineLength;
-                bool manyArgs = _o.WrapCallsWithArgumentsAtLeast > 0 && shape.Arguments.Count >= _o.WrapCallsWithArgumentsAtLeast;
-                if (!tooLong && !manyArgs)
-                    continue;
-
-                r.Wrapped = BuildWrappedCall(r, shape);
+                case ListKind.Call:
+                    return new ListSettings
+                    {
+                        Mode = _o.CallLineBreakMode,
+                        MaxItems = _o.MaxCallArgumentsOnSingleLine,
+                        CloseOnOwnLine = _o.WrappedCallClosingParenthesisOnNewLine,
+                        AlignWithOpeningParenthesis = _o.CallWrapStyle == CallWrapStyle.AlignWithOpeningParenthesis,
+                        AlignNames = _o.AlignWrappedArguments,
+                    };
+                case ListKind.Initializer:
+                    return new ListSettings
+                    {
+                        Mode = _o.InitializerLineBreakMode,
+                        MaxItems = _o.MaxInitializerArgumentsOnSingleLine,
+                        BreakAfterOpen = _o.LineBreakAfterInitializerOpenParenthesis,
+                        CloseOnOwnLine = _o.InitializerClosingParenthesisOnNewLine,
+                        AlignNames = _o.AlignWrappedArguments,
+                    };
+                default:
+                    return new ListSettings
+                    {
+                        Mode = _o.EnumLineBreakMode,
+                        MaxItems = _o.MaxEnumValuesOnSingleLine,
+                        BreakBeforeOpen = _o.LineBreakBeforeEnumOpenParenthesis,
+                        BreakAfterOpen = _o.LineBreakAfterEnumOpenParenthesis,
+                        CloseOnOwnLine = _o.LineBreakBeforeEnumCloseParenthesis,
+                        AlignNames = _o.AlignEnumValues,
+                    };
             }
         }
 
-        private List<string> BuildWrappedCall(RLine r, CallShape shape)
+        /// <summary>Returns the physical lines of a wrapped list, or null when the line stays as it is.</summary>
+        private List<string> LayoutList(RLine r)
         {
-            var tokens = r.Source.Tokens;
-            string head = Join(tokens, 0, shape.OpenParen + 1);
-            string tail = Join(tokens, shape.CloseParen, shape.CloseParen + 2);
-            string spAfter = _o.SpaceAroundAssignment ? " " : "";
-            string spBefore = _o.SpaceAroundAssignment && _o.SpaceBeforeArgumentAssignment ? " " : "";
+            var line = r.Source;
+            if (line.IsContinuation)
+                return null;
 
-            var args = new List<(string Name, string Op, string Value, string Text)>();
-            foreach (var (start, end) in shape.Arguments)
+            ListShape shape = null;
+            if (line.IsStatement)
+                shape = ListShape.Call(line.Tokens);
+            else if (line.InDeclarationSection)
+                shape = ListShape.Initializer(line.Tokens);
+            else if (line.IsTypeHeader)
+                shape = ListShape.Enum(line.Tokens);
+            if (shape == null)
+                return null;
+
+            var s = SettingsFor(shape.Kind);
+            bool tooLong = _o.MaxLineLength > 0 && r.IndentWidth + Visual(r.CodeText, r.IndentWidth) > _o.MaxLineLength;
+            bool tooMany = s.MaxItems > 0 && shape.Items.Count > s.MaxItems;
+            bool wrap;
+            switch (s.Mode)
+            {
+                case LineBreakMode.Always: wrap = true; break;
+                case LineBreakMode.Long: wrap = tooLong || tooMany; break;
+                case LineBreakMode.LongOrMultiline: wrap = tooLong || tooMany || line.WasMultiline; break;
+                default: wrap = false; break; // Never, Preserve
+            }
+            if (!wrap)
+                return null;
+
+            var tokens = r.Code;
+            var items = ItemTexts(tokens, shape, s.AlignNames);
+            string closeTail = Join(tokens, shape.Close, tokens.Count);
+            string comment = r.CommentText == null ? string.Empty : new string(' ', Math.Max(1, _o.SpacesBeforeTrailingComment)) + r.CommentText;
+            var result = new List<string>();
+
+            if (s.AlignWithOpeningParenthesis)
+            {
+                string head = Join(tokens, 0, shape.Open + 1);
+                string inside = _o.SpaceInsideParentheses ? " " : "";
+                string pad = new string(' ', Visual(head) + inside.Length);
+                for (int i = 0; i < items.Count; i++)
+                {
+                    string prefix = i == 0 ? r.Indent + head + inside : r.Indent + pad;
+                    bool last = i == items.Count - 1;
+                    result.Add(prefix + items[i] + (last ? inside + closeTail + comment : ","));
+                }
+                return result;
+            }
+
+            string itemIndent = r.Indent + IndentString(Math.Max(1, _o.ContinuationIndent));
+            int itemIndentWidth = r.IndentWidth + Math.Max(1, _o.ContinuationIndent) * TabWidth;
+            string openText = TokenText(tokens[shape.Open]);
+            string firstPrefix = itemIndent;
+
+            if (s.BreakBeforeOpen)
+            {
+                result.Add(r.Indent + Join(tokens, 0, shape.Open));
+                if (s.BreakAfterOpen)
+                {
+                    result.Add(r.Indent + openText);
+                }
+                else
+                {
+                    // "(   Item," - the first element follows the parenthesis at the element column
+                    firstPrefix = _o.IndentStyle == IndentStyle.Tabs
+                        ? r.Indent + openText + "\t"
+                        : r.Indent + openText + new string(' ', Math.Max(1, itemIndentWidth - r.IndentWidth - openText.Length));
+                }
+            }
+            else
+            {
+                string head = r.Indent + Join(tokens, 0, shape.Open + 1);
+                if (s.BreakAfterOpen)
+                {
+                    result.Add(head);
+                }
+                else
+                {
+                    firstPrefix = head;
+                    itemIndent = new string(' ', Visual(head));
+                }
+            }
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                bool last = i == items.Count - 1;
+                string prefix = i == 0 ? firstPrefix : itemIndent;
+                if (!last)
+                    result.Add(prefix + items[i] + ",");
+                else if (s.CloseOnOwnLine)
+                    result.Add(prefix + items[i]);
+                else
+                    result.Add(prefix + items[i] + closeTail + comment);
+            }
+            if (s.CloseOnOwnLine)
+                result.Add(r.Indent + closeTail + comment);
+            return result;
+        }
+
+        /// <summary>Element texts; named elements ("a := 1", "q => b") get their operator aligned.</summary>
+        private List<string> ItemTexts(List<Token> tokens, ListShape shape, bool align)
+        {
+            var parts = new List<(string Name, string Op, string Value, string Text)>();
+            foreach (var (start, end) in shape.Items)
             {
                 int op = -1, depth = 0;
                 for (int i = start; i < end; i++)
@@ -491,47 +822,13 @@ namespace TcFormatter.Formatting
                     }
                 }
                 if (op > start && op + 1 < end)
-                    args.Add((Join(tokens, start, op), tokens[op].Text, Join(tokens, op + 1, end), null));
+                    parts.Add((Join(tokens, start, op), tokens[op].Text, Join(tokens, op + 1, end), null));
                 else
-                    args.Add((null, null, null, Join(tokens, start, end)));
+                    parts.Add((null, null, null, Join(tokens, start, end)));
             }
 
-            int nameWidth = _o.AlignWrappedArguments ? args.Where(a => a.Name != null).Select(a => a.Name.Length).DefaultIfEmpty(0).Max() : 0;
-            var argTexts = args.Select(a => a.Name == null
-                ? a.Text
-                : a.Name.PadRight(nameWidth) + spBefore + a.Op + spAfter + a.Value).ToList();
-
-            string comment = r.CommentText == null ? string.Empty : new string(' ', Math.Max(1, _o.SpacesBeforeTrailingComment)) + r.CommentText;
-            var result = new List<string>();
-
-            if (_o.CallWrapStyle == CallWrapStyle.AlignWithOpeningParenthesis)
-            {
-                string inside = _o.SpaceInsideParentheses ? " " : "";
-                string pad = new string(' ', head.Length + inside.Length);
-                for (int i = 0; i < argTexts.Count; i++)
-                {
-                    string prefix = i == 0 ? r.Indent + head + inside : r.Indent + pad;
-                    bool last = i == argTexts.Count - 1;
-                    result.Add(prefix + argTexts[i] + (last ? inside + tail + comment : ","));
-                }
-                return result;
-            }
-
-            string argIndent = r.Indent + IndentString(Math.Max(1, _o.ContinuationIndent));
-            result.Add(r.Indent + head);
-            for (int i = 0; i < argTexts.Count; i++)
-            {
-                bool last = i == argTexts.Count - 1;
-                if (!last)
-                    result.Add(argIndent + argTexts[i] + ",");
-                else if (_o.WrappedCallClosingParenthesisOnNewLine)
-                    result.Add(argIndent + argTexts[i]);
-                else
-                    result.Add(argIndent + argTexts[i] + tail + comment);
-            }
-            if (_o.WrappedCallClosingParenthesisOnNewLine)
-                result.Add(r.Indent + tail + comment);
-            return result;
+            int nameWidth = parts.Where(p => p.Name != null).Select(p => Visual(p.Name)).DefaultIfEmpty(0).Max();
+            return parts.Select(p => p.Name == null ? p.Text : AlignNamed(p.Name, nameWidth, align, p.Op, p.Value)).ToList();
         }
 
         // ------------------------------------------------------------------ tokens
@@ -593,7 +890,9 @@ namespace TcFormatter.Formatting
             if (at == ":")
                 return _o.SpaceAfterColon ? 1 : 0;
 
-            if (at == "(" )
+            if ((at == "(" && bt == "(") || (at == ")" && bt == ")"))
+                return _o.SpaceInsideParentheses && _o.SpaceBetweenNestedParentheses ? 1 : 0;
+            if (at == "(")
                 return bt == ")" ? 0 : (_o.SpaceInsideParentheses ? 1 : 0);
             if (bt == ")")
                 return _o.SpaceInsideParentheses ? 1 : 0;

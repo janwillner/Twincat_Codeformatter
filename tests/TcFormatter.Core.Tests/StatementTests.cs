@@ -37,11 +37,11 @@ public class StatementTests : FormatterTestBase
             "fbTimer(",
             "    IN := bStart,",
             "    PT := T#5S",
-            ");"), Impl(input, o => { o.WrapCallsWithArgumentsAtLeast = 2; o.WrappedCallClosingParenthesisOnNewLine = true; }));
+            ");"), Impl(input, o => { o.MaxCallArgumentsOnSingleLine = 1; o.WrappedCallClosingParenthesisOnNewLine = true; }));
 
         Assert.Equal(Lines(
             "fbTimer(IN := bStart,",
-            "        PT := T#5S);"), Impl(input, o => { o.WrapCallsWithArgumentsAtLeast = 2; o.CallWrapStyle = CallWrapStyle.AlignWithOpeningParenthesis; }));
+            "        PT := T#5S);"), Impl(input, o => { o.MaxCallArgumentsOnSingleLine = 1; o.CallWrapStyle = CallWrapStyle.AlignWithOpeningParenthesis; }));
     }
 
     [Fact]

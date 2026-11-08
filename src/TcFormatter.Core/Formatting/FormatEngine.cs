@@ -8,19 +8,29 @@ using TcFormatter.Lexing;
 namespace TcFormatter.Formatting
 {
     /// <summary>
-    /// Token based formatter. Keeps the user's line structure (except for statement splitting and call
-    /// re-wrapping) and recomputes indentation, spacing, casing, alignment and blank lines.
+    /// Token based formatter. Keeps the user's line structure (except for statement splitting, joining of
+    /// wrapped lists and the line break options) and recomputes indentation, spacing, casing, alignment and
+    /// blank lines.
     /// </summary>
     internal sealed class FormatEngine
     {
-        private static readonly Regex FormatOff = new Regex(@"tcfmt\s*:\s*off\b", RegexOptions.IgnoreCase);
-        private static readonly Regex FormatOn = new Regex(@"tcfmt\s*:\s*on\b", RegexOptions.IgnoreCase);
+        // "tcfmt: off" / "tcfmt: on" and STweep's conditional formatting directives {STweep.Disable} / {STweep.Enable}
+        private static readonly Regex FormatOff = new Regex(@"tcfmt\s*:\s*off\b|STweep\.Disable\b", RegexOptions.IgnoreCase);
+        private static readonly Regex FormatOn = new Regex(@"tcfmt\s*:\s*on\b|STweep\.Enable\b", RegexOptions.IgnoreCase);
+
+        /// <summary>Keywords allowed inside statements that may be joined onto one line.</summary>
+        private static readonly HashSet<string> ExpressionKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "AND", "OR", "XOR", "NOT", "MOD", "AND_THEN", "OR_ELSE", "TRUE", "FALSE", "THIS", "SUPER",
+            "__NEW", "__QUERYINTERFACE", "__QUERYPOINTER", "__ISVALIDREF",
+        };
 
         private readonly string _source;
         private readonly CodePart _part;
         private readonly FormatterOptions _o;
 
         private readonly List<Frame> _stack = new List<Frame>();
+
         /// <summary>Open parentheses and brackets.</summary>
         private int _paren;
 
@@ -65,6 +75,8 @@ namespace TcFormatter.Formatting
 
             var lines = BuildLines(tokens);
             MarkVerbatim(lines);
+            if (_part == CodePart.Declaration && !_o.StructOnNewLine)
+                JoinStructWithTypeHeader(lines);
 
             for (int i = 0; i < lines.Count; i++)
                 ProcessLine(lines, i);
@@ -173,19 +185,43 @@ namespace TcFormatter.Formatting
             return lines;
         }
 
+        private static bool IsDirective(Token t, Regex directive) =>
+            (t.IsComment || t.Kind == TokenKind.Pragma) && directive.IsMatch(t.Text);
+
         private static void MarkVerbatim(List<Line> lines)
         {
             bool off = false;
             foreach (var line in lines)
             {
-                bool hasOff = line.Tokens.Any(t => t.IsComment && FormatOff.IsMatch(t.Text));
-                bool hasOn = line.Tokens.Any(t => t.IsComment && FormatOn.IsMatch(t.Text));
+                bool hasOff = line.Tokens.Any(t => IsDirective(t, FormatOff));
+                bool hasOn = line.Tokens.Any(t => IsDirective(t, FormatOn));
                 if (off && !hasOn)
                     line.Verbatim = true;
                 if (hasOn)
                     off = false;
                 if (hasOff)
                     off = true;
+            }
+        }
+
+        /// <summary>StructOnNewLine = false: "TYPE ST_X :" + "STRUCT" -> "TYPE ST_X : STRUCT".</summary>
+        private static void JoinStructWithTypeHeader(List<Line> lines)
+        {
+            for (int i = 1; i < lines.Count; i++)
+            {
+                var line = lines[i];
+                var previous = lines[i - 1];
+                if (line.Verbatim || previous.Verbatim || line.BlankBefore > 0)
+                    continue;
+                bool structOnly = line.Tokens.Count >= 1 &&
+                                  (line.Tokens[0].IsKeyword("STRUCT") || line.Tokens[0].IsKeyword("UNION")) &&
+                                  line.Tokens.Skip(1).All(t => t.IsComment);
+                if (!structOnly || previous.Tokens.Count < 3 || !previous.Tokens[0].IsKeyword("TYPE") ||
+                    !previous.Tokens[previous.Tokens.Count - 1].IsOperator(":"))
+                    continue;
+                previous.Tokens.AddRange(line.Tokens);
+                lines.RemoveAt(i);
+                i--;
             }
         }
 
@@ -211,7 +247,11 @@ namespace TcFormatter.Formatting
                 case FrameKind.Struct:
                 case FrameKind.Union: return top.Level + (_o.IndentStructMembers ? 1 : 0);
                 case FrameKind.Region: return top.Level + (_o.IndentRegions ? 1 : 0);
-                case FrameKind.Case: return top.CaseInBody ? CaseBodyLevel(top) : CaseLabelLevel(top);
+                case FrameKind.Type: return top.Level + (_o.IndentTypeDeclaration ? 1 : 0);
+                case FrameKind.Case:
+                    if (top.InElse && !_o.IndentCaseElse)
+                        return top.Level + 1;
+                    return top.CaseInBody ? CaseBodyLevel(top) : CaseLabelLevel(top);
                 default: return top.Level + 1;
             }
         }
@@ -219,6 +259,8 @@ namespace TcFormatter.Formatting
         private int CaseLabelLevel(Frame f) => f.Level + (_o.IndentCaseLabels ? 1 : 0);
 
         private int CaseBodyLevel(Frame f) => CaseLabelLevel(f) + (_o.IndentCaseBody ? 1 : 0);
+
+        private int CaseElseLevel(Frame f) => _o.IndentCaseElse ? CaseLabelLevel(f) : f.Level;
 
         private Frame Find(params FrameKind[] kinds)
         {
@@ -245,12 +287,17 @@ namespace TcFormatter.Formatting
         {
             var line = lines[index];
 
-            if (!line.Verbatim && !_open && _paren == 0 && _part == CodePart.Implementation && _o.RejoinWrappedCalls)
-                TryJoinCallStatement(lines, index);
+            if (!line.Verbatim && !_open && _paren == 0)
+            {
+                TryJoinStatement(lines, index);
+                if (_o.SimpleIfOnSingleLine && _part == CodePart.Implementation)
+                    TryKeepSimpleIf(lines, index);
+            }
 
             var first = line.Tokens[0];
             line.StartsWithCloser = IsCloser(first);
-            if (line.StartsWithCloser && _paren == 0)
+            bool thenOrDo = first.IsKeyword("THEN") || first.IsKeyword("DO");
+            if ((line.StartsWithCloser || thenOrDo) && _paren == 0)
                 _open = false;
 
             bool continuation = _open || _paren > 0;
@@ -270,12 +317,36 @@ namespace TcFormatter.Formatting
             }
             else
             {
-                if (Top != null && Top.Kind == FrameKind.Case && Top.HeaderDone)
+                var caseFrame = Top != null && Top.Kind == FrameKind.Case && Top.HeaderDone ? Top : null;
+                if (caseFrame != null)
                     caseLabelColon = FindCaseLabelColon(line.Tokens);
                 level = LevelForStatementStart(first, caseLabelColon >= 0);
+
+                if (caseFrame != null && _o.CommentBeforeCaseLabelAtLabelLevel && caseFrame.CaseInBody &&
+                    line.Tokens.All(t => t.IsComment || t.Kind == TokenKind.Pragma))
+                {
+                    var next = NextCodeLine(lines, index);
+                    if (next != null && next.Tokens[0].IsKeyword("ELSE"))
+                        level = CaseElseLevel(caseFrame);
+                    else if (next != null && FindCaseLabelColon(next.Tokens) >= 0)
+                        level = CaseLabelLevel(caseFrame);
+                }
+
+                if (caseFrame != null && (caseLabelColon >= 0 || first.IsKeyword("ELSE")))
+                {
+                    line.IsCaseBranchStart = true;
+                    line.PreviousCaseBranchLines = caseFrame.BranchStarted ? caseFrame.BranchLines : -1;
+                    caseFrame.BranchStarted = true;
+                    caseFrame.BranchLines = 0;
+                }
+
                 _statementLevel = Math.Max(0, level);
                 _statementHead = line;
             }
+
+            var countingCase = Find(FrameKind.Case);
+            if (countingCase != null && countingCase.BranchStarted)
+                countingCase.BranchLines++;
 
             line.Indent = Math.Max(0, level);
             line.IsContinuation = continuation;
@@ -283,9 +354,24 @@ namespace TcFormatter.Formatting
                                 first.Kind == TokenKind.Identifier;
             line.InDeclarationSection = !continuation && InDeclarationStatementContext;
             line.IsStatement = !continuation && _part == CodePart.Implementation;
+            line.IsTypeHeader = !continuation && _part == CodePart.Declaration && IsTypeStart(first);
 
             WalkTokens(lines, index, line.Indent, caseLabelColon);
             line.FrameId = Top?.Id ?? 0;
+        }
+
+        /// <summary>"TYPE name :" or, after a line break behind TYPE, "name :" directly inside TYPE.</summary>
+        private bool IsTypeStart(Token first) =>
+            first.IsKeyword("TYPE") || (Top != null && Top.Kind == FrameKind.Type && _paren == 0 && first.Kind == TokenKind.Identifier);
+
+        private static Line NextCodeLine(List<Line> lines, int index)
+        {
+            for (int i = index + 1; i < lines.Count; i++)
+            {
+                if (lines[i].Tokens.Any(t => !t.IsComment && t.Kind != TokenKind.Pragma))
+                    return lines[i];
+            }
+            return null;
         }
 
         private int LevelForStatementStart(Token first, bool isCaseLabel)
@@ -297,6 +383,12 @@ namespace TcFormatter.Formatting
                     case "END_IF":
                     case "ELSIF":
                         return LevelOf(Find(FrameKind.If));
+                    case "THEN":
+                        var ifFrame = Find(FrameKind.If);
+                        return ifFrame == null ? BodyLevel() : ifFrame.Level + (_o.IndentThen ? 1 : 0);
+                    case "DO":
+                        var loop = Find(FrameKind.For, FrameKind.While);
+                        return loop == null ? BodyLevel() : loop.Level + (_o.IndentDo ? 1 : 0);
                     case "END_CASE": return LevelOf(Find(FrameKind.Case));
                     case "END_FOR": return LevelOf(Find(FrameKind.For));
                     case "END_WHILE": return LevelOf(Find(FrameKind.While));
@@ -305,6 +397,7 @@ namespace TcFormatter.Formatting
                     case "END_VAR": return LevelOf(Find(FrameKind.Var));
                     case "END_STRUCT": return LevelOf(Find(FrameKind.Struct));
                     case "END_UNION": return LevelOf(Find(FrameKind.Union));
+                    case "END_TYPE": return LevelOf(Find(FrameKind.Type));
                     case "__CATCH":
                     case "__FINALLY":
                     case "__ENDTRY": return LevelOf(Find(FrameKind.Try));
@@ -312,7 +405,7 @@ namespace TcFormatter.Formatting
                         var f = Find(FrameKind.If, FrameKind.Case);
                         if (f == null)
                             return BodyLevel();
-                        return f.Kind == FrameKind.Case ? CaseLabelLevel(f) : f.Level;
+                        return f.Kind == FrameKind.Case ? CaseElseLevel(f) : f.Level;
                 }
             }
             if (first.Kind == TokenKind.Pragma && IsEndRegion(first))
@@ -333,7 +426,7 @@ namespace TcFormatter.Formatting
             switch (t.Upper)
             {
                 case "END_IF": case "ELSIF": case "ELSE": case "END_CASE": case "END_FOR": case "END_WHILE":
-                case "UNTIL": case "END_REPEAT": case "END_VAR": case "END_STRUCT": case "END_UNION":
+                case "UNTIL": case "END_REPEAT": case "END_VAR": case "END_STRUCT": case "END_UNION": case "END_TYPE":
                 case "__CATCH": case "__FINALLY": case "__ENDTRY":
                     return true;
                 default:
@@ -373,7 +466,7 @@ namespace TcFormatter.Formatting
                         case ":": return depth == 0 && any ? k : -1;
                         case ";": case ":=": case "=>": return -1;
                     }
-                    if (t.Text.EndsWith("=", StringComparison.Ordinal) && char.IsLetter(t.Text[0]))
+                    if (StLanguage.IsAssignmentOperator(t))
                         return -1; // S= R= REF=
                 }
                 if (t.Kind == TokenKind.Keyword && !t.Is("TRUE") && !t.Is("FALSE"))
@@ -383,15 +476,38 @@ namespace TcFormatter.Formatting
             return -1;
         }
 
+        /// <summary>Line break before THEN / DO / STRUCT when configured (the keyword starts a new line).</summary>
+        private bool SplitBefore(List<Token> tokens, int k)
+        {
+            var t = tokens[k];
+            if (t.Kind != TokenKind.Keyword)
+                return false;
+            if (t.Is("THEN"))
+                return _o.LineBreakBeforeThen;
+            if (t.Is("DO"))
+                return _o.LineBreakBeforeDo && Top != null && (Top.Kind == FrameKind.For || Top.Kind == FrameKind.While) && !Top.HeaderDone;
+            if (t.Is("STRUCT") || t.Is("UNION"))
+                return _o.StructOnNewLine && _part == CodePart.Declaration;
+            return false;
+        }
+
         private void WalkTokens(List<Line> lines, int index, int lineLevel, int caseLabelColon)
         {
             var line = lines[index];
             var tokens = line.Tokens;
             bool opensBlock = false;
+            bool maySplit = !line.Verbatim && !line.NoSplit;
 
             for (int k = 0; k < tokens.Count; k++)
             {
                 var t = tokens[k];
+
+                if (maySplit && k > 0 && SplitBefore(tokens, k) && tokens.Take(k).Any(x => !x.IsComment))
+                {
+                    MoveToNewLine(lines, index, k);
+                    break;
+                }
+
                 int splitAfter = -1;
                 bool structural = false;
 
@@ -460,15 +576,12 @@ namespace TcFormatter.Formatting
                             break;
                     }
                 }
-                else if (t.Kind == TokenKind.Keyword && !line.Verbatim)
-                {
-                    structural = HandleKeyword(tokens, ref k, lineLevel, ref splitAfter, ref opensBlock);
-                    t = tokens[k];
-                }
                 else if (t.Kind == TokenKind.Keyword)
                 {
-                    int dummy = -1;
-                    structural = HandleKeyword(tokens, ref k, lineLevel, ref dummy, ref opensBlock);
+                    int keywordSplit = -1;
+                    structural = HandleKeyword(tokens, ref k, lineLevel, ref keywordSplit, ref opensBlock);
+                    if (maySplit)
+                        splitAfter = keywordSplit;
                     t = tokens[k];
                 }
 
@@ -476,16 +589,22 @@ namespace TcFormatter.Formatting
                     _open = true;
                 _prevSignificant = t;
 
-                if (splitAfter >= 0 && !line.Verbatim && HasCodeAfter(tokens, splitAfter))
+                if (splitAfter >= 0 && maySplit && HasCodeAfter(tokens, splitAfter))
                 {
-                    var rest = tokens.GetRange(splitAfter + 1, tokens.Count - splitAfter - 1);
-                    tokens.RemoveRange(splitAfter + 1, tokens.Count - splitAfter - 1);
-                    lines.Insert(index + 1, new Line { Tokens = rest, BlankBefore = 0, OriginalText = string.Empty });
+                    MoveToNewLine(lines, index, splitAfter + 1);
                     break;
                 }
             }
 
             line.OpensBlock = opensBlock;
+        }
+
+        private static void MoveToNewLine(List<Line> lines, int index, int from)
+        {
+            var tokens = lines[index].Tokens;
+            var rest = tokens.GetRange(from, tokens.Count - from);
+            tokens.RemoveRange(from, tokens.Count - from);
+            lines.Insert(index + 1, new Line { Tokens = rest, BlankBefore = 0, OriginalText = string.Empty, WasMultiline = lines[index].WasMultiline });
         }
 
         /// <summary>Updates the block structure for a keyword. Returns true when the keyword ends a statement.</summary>
@@ -531,7 +650,10 @@ namespace TcFormatter.Formatting
                 case "ELSE":
                     var f = Find(FrameKind.If, FrameKind.Case);
                     if (f != null && f.Kind == FrameKind.Case)
+                    {
                         f.CaseInBody = true;
+                        f.InElse = true;
+                    }
                     _open = false;
                     opensBlock = true;
                     if (expand)
@@ -610,6 +732,18 @@ namespace TcFormatter.Formatting
                     Push(FrameKind.Union, lineLevel);
                     _open = false;
                     opensBlock = true;
+                    splitAfter = k;
+                    return true;
+                case "TYPE":
+                    if (_part != CodePart.Declaration)
+                        return false;
+                    Push(FrameKind.Type, lineLevel);
+                    if (_o.LineBreakAfterTypeKeyword)
+                        splitAfter = k;
+                    return false;
+                case "END_TYPE":
+                    Pop(FrameKind.Type);
+                    _open = false;
                     splitAfter = k;
                     return true;
                 case "END_STRUCT":
@@ -704,43 +838,105 @@ namespace TcFormatter.Formatting
             return false;
         }
 
-        // ------------------------------------------------------------------ call re-joining
+        // ------------------------------------------------------------------ joining
 
         /// <summary>
-        /// Joins a call statement that spans several lines (and contains no comments before its final ';')
-        /// into one logical line, so the renderer can decide deterministically how to wrap it.
+        /// Joins a statement that spans several lines into one logical line when a line break option asks for it:
+        /// wrapped calls, initializers and implicit enums (their layout is then decided by the renderer), and any
+        /// simple statement when <see cref="FormatterOptions.KeepExistingLineBreaks"/> is off.
         /// </summary>
-        private static void TryJoinCallStatement(List<Line> lines, int index)
+        private void TryJoinStatement(List<Line> lines, int index)
         {
             var first = lines[index];
-            int depth = 0;
-            if (EndsStatement(first.Tokens, ref depth, out bool firstHasComment) || firstHasComment || depth <= 0)
+            if (first.Tokens[0].IsComment || first.Tokens[0].Kind == TokenKind.Pragma)
                 return;
 
-            var merged = new List<Token>(first.Tokens);
-            int last = index;
+            if (_part == CodePart.Implementation)
+            {
+                if (_o.CallLineBreakMode == LineBreakMode.Preserve && _o.KeepExistingLineBreaks)
+                    return;
+                if (!JoinUntilSemicolon(lines, index, out var merged, out int last))
+                    return;
+                if (_o.CallLineBreakMode != LineBreakMode.Preserve && ListShape.Call(merged) != null)
+                {
+                    Replace(lines, index, merged, last);
+                    return;
+                }
+                if (!_o.KeepExistingLineBreaks && IsSimpleStatement(merged) && FitsOnOneLine(merged, BodyLevel()))
+                    Replace(lines, index, merged, last);
+                return;
+            }
+
+            if (InDeclarationStatementContext)
+            {
+                if (_o.InitializerLineBreakMode == LineBreakMode.Preserve)
+                    return;
+                if (JoinUntilSemicolon(lines, index, out var merged, out int last) && ListShape.Initializer(merged) != null)
+                    Replace(lines, index, merged, last);
+                return;
+            }
+
+            if (IsTypeStart(first.Tokens[0]) && _o.EnumLineBreakMode != LineBreakMode.Preserve)
+            {
+                if (JoinUntilSemicolon(lines, index, out var merged, out int last) && ListShape.Enum(merged) != null)
+                    Replace(lines, index, merged, last);
+            }
+        }
+
+        private static void Replace(List<Line> lines, int index, List<Token> merged, int last)
+        {
+            lines[index].Tokens = merged;
+            lines[index].WasMultiline = true;
+            lines.RemoveRange(index + 1, last - index);
+        }
+
+        /// <summary>
+        /// Collects the tokens from line <paramref name="index"/> up to the line with the ';' that ends the statement
+        /// (at depth 0). Fails for single line statements, comments before the ';', blank lines or verbatim lines.
+        /// </summary>
+        private static bool JoinUntilSemicolon(List<Line> lines, int index, out List<Token> merged, out int last)
+        {
+            merged = null;
+            last = index;
+            int depth = 0;
+            if (EndsStatement(lines[index].Tokens, ref depth, out bool firstHasComment) || firstHasComment || depth < 0)
+                return false;
+
+            var tokens = new List<Token>(lines[index].Tokens);
             for (int j = index + 1; j < lines.Count && j < index + 500; j++)
             {
                 var next = lines[j];
                 if (next.Verbatim || next.BlankBefore > 0)
-                    return;
+                    return false;
                 bool ends = EndsStatement(next.Tokens, ref depth, out bool hasComment);
                 if (hasComment && !ends)
-                    return;
-                merged.AddRange(next.Tokens);
-                last = j;
+                    return false;
+                tokens.AddRange(next.Tokens);
                 if (ends)
-                    break;
+                {
+                    if (!EndsWithSemicolonAndComments(tokens))
+                        return false;
+                    merged = tokens;
+                    last = j;
+                    return true;
+                }
                 if (depth < 0)
-                    return;
+                    return false;
             }
-            if (last == index || !EndsWithSemicolonAndComments(merged))
-                return;
-            if (CallShape.TryParse(merged) == null)
-                return;
+            return false;
+        }
 
-            first.Tokens = merged;
-            lines.RemoveRange(index + 1, last - index);
+        /// <summary>No control keywords, pragmas or CASE labels (a bare ':').</summary>
+        private static bool IsSimpleStatement(List<Token> tokens) =>
+            tokens.All(t => t.Kind != TokenKind.Keyword || ExpressionKeywords.Contains(t.Text)) &&
+            !tokens.Any(t => t.Kind == TokenKind.Pragma || t.IsOperator(":"));
+
+        private bool FitsOnOneLine(List<Token> tokens, int level)
+        {
+            if (_o.MaxLineLength <= 0)
+                return true;
+            int width = level * Math.Max(1, _o.IndentSize) + tokens.Sum(t => t.Text.Length) + tokens.Count - 1;
+            return width <= _o.MaxLineLength;
         }
 
         /// <summary>Scans a line; true when it contains the ';' that ends the statement (at depth 0).</summary>
@@ -784,6 +980,80 @@ namespace TcFormatter.Formatting
             while (i >= 0 && tokens[i].IsComment)
                 i--;
             return i >= 0 && tokens[i].IsOperator(";");
+        }
+
+        // ------------------------------------------------------------------ simple IF on one line
+
+        /// <summary>
+        /// SimpleIfOnSingleLine: 'IF cond THEN stmt; END_IF' with one simple statement stays on one line (or is
+        /// joined from three lines) when it fits into MaxLineLength.
+        /// </summary>
+        private void TryKeepSimpleIf(List<Line> lines, int index)
+        {
+            var line = lines[index];
+            if (!line.Tokens[0].IsKeyword("IF"))
+                return;
+
+            if (IsSimpleIf(line.Tokens))
+            {
+                if (FitsOnOneLine(CodeOf(line.Tokens), BodyLevel()))
+                    line.NoSplit = true;
+                return;
+            }
+
+            // IF cond THEN / statement; / END_IF
+            if (index + 2 >= lines.Count)
+                return;
+            var body = lines[index + 1];
+            var end = lines[index + 2];
+            if (body.Verbatim || end.Verbatim || body.BlankBefore > 0 || end.BlankBefore > 0 ||
+                line.Tokens.Any(t => t.IsComment) || body.Tokens.Any(t => t.IsComment))
+                return;
+            var merged = line.Tokens.Concat(body.Tokens).Concat(end.Tokens).ToList();
+            if (!IsSimpleIf(merged) || !FitsOnOneLine(CodeOf(merged), BodyLevel()))
+                return;
+            line.Tokens = merged;
+            line.NoSplit = true;
+            lines.RemoveRange(index + 1, 2);
+        }
+
+        private static List<Token> CodeOf(List<Token> tokens) => tokens.Where(t => !t.IsComment).ToList();
+
+        private static bool IsSimpleIf(List<Token> tokens)
+        {
+            var code = CodeOf(tokens);
+            if (code.Count < 6 || !code[0].IsKeyword("IF") || code.Any(t => t.Kind == TokenKind.Pragma))
+                return false;
+            if (tokens.Take(tokens.FindLastIndex(t => !t.IsComment) + 1).Any(t => t.IsComment))
+                return false; // comments only at the end
+
+            int then = code.FindIndex(t => t.IsKeyword("THEN"));
+            if (then < 2)
+                return false;
+            for (int i = 1; i < then; i++)
+            {
+                if (code[i].Kind == TokenKind.Keyword && !ExpressionKeywords.Contains(code[i].Text))
+                    return false;
+            }
+
+            int semicolon = -1, depth = 0;
+            for (int i = then + 1; i < code.Count; i++)
+            {
+                var t = code[i];
+                if (t.IsOperator("(") || t.IsOperator("[")) depth++;
+                else if (t.IsOperator(")") || t.IsOperator("]")) depth--;
+                else if (depth == 0 && t.IsOperator(";"))
+                {
+                    semicolon = i;
+                    break;
+                }
+                else if (t.Kind == TokenKind.Keyword && !ExpressionKeywords.Contains(t.Text))
+                    return false;
+            }
+            if (semicolon <= then + 1 || semicolon + 1 >= code.Count || !code[semicolon + 1].IsKeyword("END_IF"))
+                return false;
+            int rest = code.Count - (semicolon + 2);
+            return rest == 0 || (rest == 1 && code[code.Count - 1].IsOperator(";"));
         }
     }
 }

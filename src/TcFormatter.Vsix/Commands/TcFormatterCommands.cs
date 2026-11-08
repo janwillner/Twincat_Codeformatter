@@ -31,6 +31,7 @@ namespace TcFormatter.Vsix.Commands
         private const int OpenConfigId = 0x0105;
         private const int OpenOptionsId = 0x0106;
         private const int DiagnoseMenusId = 0x0107;
+        private const int ImportStweepId = 0x0108;
 
         private readonly TcFormatterPackage _package;
         private readonly DTE2 _dte;
@@ -54,6 +55,7 @@ namespace TcFormatter.Vsix.Commands
             Add(service, CheckSolutionId, (arg, click) => RunAll(format: false, lint: true));
             Add(service, OpenConfigId, (arg, click) => OpenConfiguration());
             Add(service, OpenOptionsId, (arg, click) => _package.ShowOptionPage(typeof(FormatOptionsPage)));
+            Add(service, ImportStweepId, (arg, click) => ImportStweep(arg));
             Add(service, DiagnoseMenusId, (arg, click) =>
             {
                 string file = Path.Combine(Path.GetTempPath(), "TcFormatter-menus.txt");
@@ -308,6 +310,51 @@ namespace TcFormatter.Vsix.Commands
                 _log.Write("Created " + file);
             }
             _dte.ItemOperations.OpenFile(file);
+        }
+
+        /// <summary>
+        /// Converts a settings file exported from STweep into the IDE settings (%APPDATA%\TcFormatter\.tcformat.json).
+        /// The naming rules of the current settings are kept. Argument: path of the .stweep file (else a file dialog).
+        /// </summary>
+        private void ImportStweep(string file)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (file == null)
+            {
+                using (var dialog = new System.Windows.Forms.OpenFileDialog
+                {
+                    Title = "Import STweep settings",
+                    Filter = "STweep settings (*.stweep)|*.stweep|All files (*.*)|*.*",
+                })
+                {
+                    if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                        return;
+                    file = dialog.FileName;
+                }
+            }
+
+            TcFormatConfig imported;
+            List<string> notes;
+            try
+            {
+                imported = StweepImport.Convert(File.ReadAllText(file), out notes);
+            }
+            catch (Exception ex) when (ex is ConfigException || ex is IOException)
+            {
+                Report("STweep import failed: " + ex.Message);
+                return;
+            }
+
+            var current = TcFormatConfig.LoadUser(out _);
+            current.Format = imported.Format;
+            current.SaveTo(TcFormatConfig.UserConfigFile);
+
+            _log.Write($"Imported STweep settings from {file} into {TcFormatConfig.UserConfigFile}.");
+            foreach (var note in notes)
+                _log.Write("  NOTE " + note);
+            _log.Write("A .tcformat.json in the project still takes precedence over these IDE settings.");
+            _log.Show();
+            _dte.StatusBar.Text = $"TcFormatter: STweep settings imported ({notes.Count} note(s), see Output window).";
         }
 
         private void Report(string message)

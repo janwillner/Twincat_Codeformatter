@@ -67,6 +67,25 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Import_stweep_writes_a_configuration()
+    {
+        var stweep = Path.Combine(_dir, "my.stweep");
+        File.WriteAllText(stweep, """{ "Settings": { "TabsIndentAlignment": { "IndentStyle": 0, "IndentSize": 2 }, "Spaces": { "AroundDot": true } }, "Version": "4.5.0.0" }""");
+
+        var result = Run("import-stweep", stweep, _dir);
+
+        Assert.Equal(Program.Ok, result.Exit);
+        Assert.Contains("AroundDot", result.Out);
+        var config = Configuration.TcFormatConfig.Load(Path.Combine(_dir, ".tcformat.json"), out var warnings);
+        Assert.Empty(warnings);
+        Assert.Equal(2, config.Format.IndentSize);
+        Assert.Equal(Formatting.IndentStyle.Spaces, config.Format.IndentStyle);
+
+        Assert.Equal(Program.UsageError, Run("import-stweep", stweep, _dir).Exit); // exists
+        Assert.Equal(Program.Ok, Run("import-stweep", stweep, _dir, "--force").Exit);
+    }
+
+    [Fact]
     public void Stdin_formats_text()
     {
         var stdout = new StringWriter();

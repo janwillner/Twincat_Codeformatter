@@ -112,7 +112,10 @@ namespace TcFormatter.Configuration
                 if (pair.Key.StartsWith("$", StringComparison.Ordinal))
                     continue; // $schema, $comment
                 if (Is(pair.Key, "format"))
+                {
                     Apply(config.Format, pair.Value, "format", warnings);
+                    ApplyFormerCallKeys(config.Format, pair.Value);
+                }
                 else if (Is(pair.Key, "naming"))
                     Apply(config.Naming, pair.Value, "naming", warnings);
                 else
@@ -138,6 +141,34 @@ namespace TcFormatter.Configuration
 
         private static bool Is(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
+        /// <summary>Keys of earlier versions that are still understood (mapped onto their replacement).</summary>
+        private static readonly string[] FormerFormatKeys = { "wrapLongCalls", "rejoinWrappedCalls", "wrapCallsWithArgumentsAtLeast" };
+
+        /// <summary>wrapLongCalls / rejoinWrappedCalls / wrapCallsWithArgumentsAtLeast -> callLineBreakMode / maxCallArgumentsOnSingleLine.</summary>
+        private static void ApplyFormerCallKeys(FormatterOptions format, object value)
+        {
+            if (!(value is List<KeyValuePair<string, object>> members))
+                return;
+            object Get(string key) => members.FirstOrDefault(m => Is(m.Key, key)).Value;
+
+            bool wrapLong = !(Get("wrapLongCalls") is bool w) || w;
+            bool rejoin = !(Get("rejoinWrappedCalls") is bool j) || j;
+            if (!wrapLong && !rejoin)
+                format.CallLineBreakMode = LineBreakMode.Preserve;
+            else if (!wrapLong)
+                format.CallLineBreakMode = LineBreakMode.Never;
+            else if (!rejoin)
+                format.CallLineBreakMode = LineBreakMode.LongOrMultiline;
+
+            if (Get("wrapCallsWithArgumentsAtLeast") is double atLeast && atLeast > 0)
+            {
+                if (atLeast <= 1)
+                    format.CallLineBreakMode = LineBreakMode.Always;
+                else
+                    format.MaxCallArgumentsOnSingleLine = (int)atLeast - 1;
+            }
+        }
+
         private static IEnumerable<PropertyInfo> Settings(Type type) =>
             type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.CanRead && p.CanWrite);
 
@@ -155,7 +186,8 @@ namespace TcFormatter.Configuration
                 string key = path + "." + member.Key;
                 if (property == null)
                 {
-                    warnings.Add($"Unknown setting '{key}'.");
+                    if (!(target is FormatterOptions && FormerFormatKeys.Any(k => Is(k, member.Key))))
+                        warnings.Add($"Unknown setting '{key}'.");
                     continue;
                 }
                 try

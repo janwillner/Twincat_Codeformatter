@@ -22,6 +22,8 @@ public static class Program
           tcfmt lint   [options] <path>...   Check naming conventions
           tcfmt stdin  --part decl|impl      Format Structured Text from stdin to stdout
           tcfmt init   [<directory>]         Write a .tcformat.json with all options and their defaults
+          tcfmt import-stweep <file.stweep> [<directory>]
+                                             Convert settings exported from STweep into a .tcformat.json
 
         Options:
           --config <file>      Use this configuration instead of the nearest .tcformat.json
@@ -64,6 +66,7 @@ public static class Program
                 "lint" => new Runner(options, stdout, stderr).Lint(),
                 "stdin" => Stdin(options, stdin, stdout, stderr),
                 "init" => Init(options, stdout, stderr),
+                "import-stweep" => ImportStweep(options, stdout, stderr),
                 _ => throw new UsageException($"Unknown command '{options.Command}'. Run 'tcfmt --help'."),
             };
         }
@@ -112,6 +115,35 @@ public static class Program
         }
         File.WriteAllText(file, new TcFormatConfig().ToJson(includeDescriptions: true), new UTF8Encoding(false));
         stdout.WriteLine("Created " + file);
+        return Ok;
+    }
+
+    private static int ImportStweep(CliOptions options, TextWriter stdout, TextWriter stderr)
+    {
+        if (options.Paths.Count == 0)
+            throw new UsageException("'import-stweep' needs the STweep settings file: tcfmt import-stweep <file.stweep> [<directory>]");
+        string source = options.Paths[0];
+        if (!File.Exists(source))
+            throw new UsageException($"'{source}' does not exist.");
+        string directory = options.Paths.Count > 1 ? options.Paths[1] : Directory.GetCurrentDirectory();
+        string target = directory.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+            ? directory
+            : Path.Combine(directory, TcFormatConfig.FileName);
+        if (File.Exists(target) && !options.Force)
+        {
+            stderr.WriteLine($"error: {target} already exists (use --force to overwrite).");
+            return UsageError;
+        }
+
+        var config = StweepImport.Convert(File.ReadAllText(source), out var notes);
+        config.SaveTo(target);
+        stdout.WriteLine($"Created {target} from {source}.");
+        if (notes.Count > 0)
+        {
+            stdout.WriteLine($"{notes.Count} STweep setting(s) could not be taken over exactly:");
+            foreach (var note in notes)
+                stdout.WriteLine("  - " + note);
+        }
         return Ok;
     }
 

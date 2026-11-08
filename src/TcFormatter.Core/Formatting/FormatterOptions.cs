@@ -16,6 +16,25 @@ namespace TcFormatter.Formatting
 
     public enum CallWrapStyle { OnePerLineIndented, AlignWithOpeningParenthesis }
 
+    /// <summary>How lists in parentheses (calls, enums, initializers) are broken over lines.</summary>
+    public enum LineBreakMode
+    {
+        /// <summary>Keep the line breaks as written.</summary>
+        Preserve,
+
+        /// <summary>One line unless it is too long or has too many elements; wrapped lists are re-joined.</summary>
+        Long,
+
+        /// <summary>Like Long, but lists that are already wrapped stay wrapped.</summary>
+        LongOrMultiline,
+
+        /// <summary>Always one element per line.</summary>
+        Always,
+
+        /// <summary>Always one line.</summary>
+        Never,
+    }
+
     /// <summary>
     /// All formatting options. Every property maps 1:1 to a key in the "format" section of .tcformat.json
     /// (camelCase) and to an entry on the IDE options page.
@@ -23,7 +42,7 @@ namespace TcFormatter.Formatting
     public sealed class FormatterOptions
     {
         // ---------------------------------------------------------------- Indentation & whitespace
-        [Category("1 Indentation"), Description("Indent with tabs or spaces. Alignment inside lines always uses spaces.")]
+        [Category("1 Indentation"), Description("Indent with tabs or spaces. Alignment inside lines uses spaces unless AlignWithTabs is on.")]
         public IndentStyle IndentStyle { get; set; } = IndentStyle.Tabs;
 
         [Category("1 Indentation"), Description("Number of spaces per indentation level (also the tab width used to compute line length).")]
@@ -169,11 +188,11 @@ namespace TcFormatter.Formatting
         [Category("6 Statements"), Description("Align ':=' of consecutive simple assignments.")]
         public bool AlignConsecutiveAssignments { get; set; } = false;
 
-        [Category("6 Statements"), Description("Wrap calls with named arguments that exceed MaxLineLength (one argument per line).")]
-        public bool WrapLongCalls { get; set; } = true;
+        [Category("6 Statements"), Description("Line breaking of call statements with arguments. Long: one line unless too long (wrapped calls are re-joined, like Black). LongOrMultiline: also keep calls that are already wrapped wrapped. Always: one argument per line. Never: always one line. Preserve: keep the existing line breaks.")]
+        public LineBreakMode CallLineBreakMode { get; set; } = LineBreakMode.Long;
 
-        [Category("6 Statements"), Description("Always wrap calls with at least this many named arguments (0 = only when too long).")]
-        public int WrapCallsWithArgumentsAtLeast { get; set; } = 0;
+        [Category("6 Statements"), Description("Maximum number of call arguments on a single line; calls with more arguments are wrapped (0 = no limit).")]
+        public int MaxCallArgumentsOnSingleLine { get; set; } = 0;
 
         [Category("6 Statements"), Description("Layout of wrapped calls.")]
         public CallWrapStyle CallWrapStyle { get; set; } = CallWrapStyle.OnePerLineIndented;
@@ -181,11 +200,134 @@ namespace TcFormatter.Formatting
         [Category("6 Statements"), Description("Put the closing parenthesis of a wrapped call on its own line.")]
         public bool WrappedCallClosingParenthesisOnNewLine { get; set; } = false;
 
-        [Category("6 Statements"), Description("Align ':=' and '=>' of the arguments of wrapped calls.")]
+        [Category("6 Statements"), Description("Align ':=' and '=>' of the arguments of wrapped calls and initializers.")]
         public bool AlignWrappedArguments { get; set; } = true;
 
-        [Category("6 Statements"), Description("Re-join call statements that were wrapped over several lines (without comments inside) before deciding how to wrap them. Makes call layout fully deterministic, like Black.")]
-        public bool RejoinWrappedCalls { get; set; } = true;
+        [Category("6 Statements"), Description("Keep 'IF a THEN b; END_IF' with a single statement on one line (and join such IF statements) when it fits into MaxLineLength.")]
+        public bool SimpleIfOnSingleLine { get; set; } = false;
+
+        [Category("6 Statements"), Description("Put THEN on its own line.")]
+        public bool LineBreakBeforeThen { get; set; } = false;
+
+        [Category("6 Statements"), Description("Indent THEN when it is on its own line.")]
+        public bool IndentThen { get; set; } = false;
+
+        [Category("6 Statements"), Description("Put DO of FOR / WHILE on its own line.")]
+        public bool LineBreakBeforeDo { get; set; } = false;
+
+        [Category("6 Statements"), Description("Indent DO when it is on its own line.")]
+        public bool IndentDo { get; set; } = false;
+
+        [Category("6 Statements"), Description("Keep line breaks inside statements. Off: statements without comments or control keywords are joined into one line when they fit into MaxLineLength.")]
+        public bool KeepExistingLineBreaks { get; set; } = true;
+
+        // ---------------------------------------------------------------- CASE
+        [Category("7 CASE"), Description("Indent ELSE of a CASE statement like the labels. Off: ELSE is aligned with CASE.")]
+        public bool IndentCaseElse { get; set; } = true;
+
+        [Category("7 CASE"), Description("A comment directly before a CASE label or ELSE gets the indentation of the label.")]
+        public bool CommentBeforeCaseLabelAtLabelLevel { get; set; } = false;
+
+        [Category("7 CASE"), Description("Minimum blank lines after a CASE branch that consists of a single line.")]
+        public int BlankLinesAfterSingleLineCase { get; set; } = 0;
+
+        [Category("7 CASE"), Description("Minimum blank lines after a CASE branch that spans several lines.")]
+        public int BlankLinesAfterMultiLineCase { get; set; } = 0;
+
+        // ---------------------------------------------------------------- Types and initializers
+        [Category("8 Types and initializers"), Description("Put STRUCT / UNION on the line after 'TYPE name :'. Off: 'TYPE name : STRUCT'.")]
+        public bool StructOnNewLine { get; set; } = true;
+
+        [Category("8 Types and initializers"), Description("Line breaking of implicit enums 'TYPE E : (A, B) END_TYPE' (see CallLineBreakMode for the values).")]
+        public LineBreakMode EnumLineBreakMode { get; set; } = LineBreakMode.Preserve;
+
+        [Category("8 Types and initializers"), Description("Maximum number of enum values on a single line (0 = no limit).")]
+        public int MaxEnumValuesOnSingleLine { get; set; } = 0;
+
+        [Category("8 Types and initializers"), Description("Line break before the '(' of a wrapped enum.")]
+        public bool LineBreakBeforeEnumOpenParenthesis { get; set; } = true;
+
+        [Category("8 Types and initializers"), Description("Line break after the '(' of a wrapped enum.")]
+        public bool LineBreakAfterEnumOpenParenthesis { get; set; } = true;
+
+        [Category("8 Types and initializers"), Description("Line break before the ')' of a wrapped enum.")]
+        public bool LineBreakBeforeEnumCloseParenthesis { get; set; } = true;
+
+        [Category("8 Types and initializers"), Description("Line breaking of structure, array and function block initializers in declarations (see CallLineBreakMode for the values).")]
+        public LineBreakMode InitializerLineBreakMode { get; set; } = LineBreakMode.Preserve;
+
+        [Category("8 Types and initializers"), Description("Maximum number of initializer values on a single line (0 = no limit).")]
+        public int MaxInitializerArgumentsOnSingleLine { get; set; } = 0;
+
+        [Category("8 Types and initializers"), Description("Put the closing parenthesis / bracket of a wrapped initializer on its own line.")]
+        public bool InitializerClosingParenthesisOnNewLine { get; set; } = false;
+
+        // ---------------------------------------------------------------- more lines / spacing / alignment
+        [Category("2 Lines"), Description("Keep existing blank lines (up to MaxConsecutiveBlankLines). Off: blank lines are removed except where other options add them.")]
+        public bool KeepExistingBlankLines { get; set; } = true;
+
+        [Category("2 Lines"), Description("Blank lines at the start of the text.")]
+        public int BlankLinesAtFileStart { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines before IF / CASE / FOR / WHILE / REPEAT statements (not at the start of a block).")]
+        public int BlankLinesBeforeStatementWithBody { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines after END_IF / END_CASE / END_FOR / END_WHILE / END_REPEAT (not at the end of a block).")]
+        public int BlankLinesAfterStatementWithBody { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines before a statement that spans several lines.")]
+        public int BlankLinesBeforeMultiLineStatement { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines after a statement that spans several lines.")]
+        public int BlankLinesAfterMultiLineStatement { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines before a single line statement.")]
+        public int BlankLinesBeforeSingleLineStatement { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines after a single line statement.")]
+        public int BlankLinesAfterSingleLineStatement { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines before a comment line.")]
+        public int BlankLinesBeforeSingleLineComment { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines after a comment line.")]
+        public int BlankLinesAfterSingleLineComment { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines before a comment that spans several lines.")]
+        public int BlankLinesBeforeMultiLineComment { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines after a comment that spans several lines.")]
+        public int BlankLinesAfterMultiLineComment { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines before a single line declaration.")]
+        public int BlankLinesBeforeSingleLineDeclaration { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines after a single line declaration.")]
+        public int BlankLinesAfterSingleLineDeclaration { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines before a declaration that spans several lines.")]
+        public int BlankLinesBeforeMultiLineDeclaration { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines after a declaration that spans several lines.")]
+        public int BlankLinesAfterMultiLineDeclaration { get; set; } = 0;
+
+        [Category("2 Lines"), Description("Minimum blank lines after END_VAR.")]
+        public int BlankLinesAfterVarBlocks { get; set; } = 0;
+
+        [Category("8 Types and initializers"), Description("Put the type name on the line after TYPE.")]
+        public bool LineBreakAfterTypeKeyword { get; set; } = false;
+
+        [Category("8 Types and initializers"), Description("Indent everything between TYPE and END_TYPE.")]
+        public bool IndentTypeDeclaration { get; set; } = false;
+
+        [Category("8 Types and initializers"), Description("Line break after the '(' / '[' of a wrapped initializer. Off: the first value follows the parenthesis and the others are aligned under it.")]
+        public bool LineBreakAfterInitializerOpenParenthesis { get; set; } = true;
+
+        [Category("3 Spacing"), Description("With 'SpaceInsideParentheses': also put spaces between nested parentheses '( ( a ) )'.")]
+        public bool SpaceBetweenNestedParentheses { get; set; } = true;
+
+        [Category("5 Declarations"), Description("Align columns (declarations, initializers, enum values, comments) with tabs on tab stops instead of spaces. Only with IndentStyle = Tabs.")]
+        public bool AlignWithTabs { get; set; } = false;
 
         public FormatterOptions Clone() => (FormatterOptions)MemberwiseClone();
     }
