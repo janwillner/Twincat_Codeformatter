@@ -11,7 +11,7 @@ param(
     [switch] $SkipTests,
     # Version stamped into the assemblies and the VSIX manifest, e.g. 1.2.0 or 1.2.0-beta.1
     [string] $Version,
-    # also create artifacts\TcFormatter-<version>.zip (VSIX, tcfmt, install.ps1, presets, README)
+    # also create artifacts\TcFormatter-<version>.zip (VSIX, tcfmt, install.ps1, presets, README, LICENSE)
     [switch] $Package
 )
 
@@ -69,7 +69,7 @@ if ($Package) {
 
     New-Item -ItemType Directory -Force $staging | Out-Null
     Copy-Item artifacts\TcFormatter.vsix $staging
-    Copy-Item install.ps1, README.md $staging
+    Copy-Item install.ps1, README.md, LICENSE $staging
     Copy-Item presets $staging -Recurse
     New-Item -ItemType Directory -Force (Join-Path $staging 'tcfmt') | Out-Null
     Get-ChildItem artifacts\cli -Exclude *.pdb | Copy-Item -Destination (Join-Path $staging 'tcfmt')

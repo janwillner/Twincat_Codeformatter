@@ -18,7 +18,7 @@ Code-Formatter und Namensprüfung für **TwinCAT 3 Structured Text**, als Extens
 powershell -ExecutionPolicy Bypass -File .\install.ps1     # nimmt die TcFormatter.vsix daneben
 ```
 
-Das Zip enthält außerdem `tcfmt\` (Kommandozeile, braucht die .NET 8 Runtime) und `presets\`.
+Das Zip enthält außerdem `tcfmt\` (Kommandozeile, braucht die .NET 8 Runtime), `presets\` und die `LICENSE`.
 
 **Aus dem Quellcode:**
 
@@ -245,3 +245,7 @@ baut beide Optionsseiten unsichtbar auf, wählt jede Option einmal aus und schre
 `"select:<Pfad>|format"` simuliert einen Rechtsklick auf einen Knoten des Projektmappen-Explorers.
 `"settingsfile"` meldet, welche Datei *Extras → Optionen* bearbeitet.
 `"errorlist:run:OtherContextMenus.ErrorList.Clear"` führt „Clear“ der Fehlerliste aus und meldet danach die Zahl der Naming-Einträge.
+
+## Lizenz
+
+[MIT](LICENSE), Copyright (c) 2026 Jan Willner.
