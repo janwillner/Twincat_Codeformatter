@@ -24,6 +24,14 @@ public class NamingCheckerTests
     }
 
     [Fact]
+    public void The_type_in_a_message_is_written_without_spaces_around_dots()
+    {
+        var d = Assert.Single(Check("VAR\n\tvalues : ARRAY[1..GVL_Main.cMax] OF Tc2_Standard.TON;\nEND_VAR"));
+
+        Assert.Contains("of type ARRAY[1..GVL_Main.cMax] OF Tc2_Standard.TON should", d.Message);
+    }
+
+    [Fact]
     public void Positions_come_from_the_parsed_tokens()
     {
         var d = Assert.Single(Check("FUNCTION_BLOCK FB_Motor\r\nVAR\r\n\tspeed : LREAL;\r\nEND_VAR"));

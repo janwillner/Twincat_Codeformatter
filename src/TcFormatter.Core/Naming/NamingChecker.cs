@@ -297,7 +297,7 @@ namespace TcFormatter.Naming
                     suggestion = accepted[0] + ApplyCase(suggestion.Substring(accepted[0].Length), _rules.ConstantNameCase);
                 suggestion = lead + suggestion;
                 string typeText = string.Join(" ", TypeTokens(type))
-                    .Replace(" [ ", "[").Replace(" ]", "]").Replace(" ( ", "(").Replace(" )", ")").Replace(" .. ", "..").Replace(" , ", ", ");
+                    .Replace(" [ ", "[").Replace(" ]", "]").Replace(" ( ", "(").Replace(" )", ")").Replace(" .. ", "..").Replace(" . ", ".").Replace(" , ", ", ");
                 string expected = string.Join("' or '", accepted.Distinct());
                 Report(NamingRuleIds.VariablePrefix, severity, name,
                     $"Variable '{name.Text}' of type {typeText} should start with '{expected}'" +
