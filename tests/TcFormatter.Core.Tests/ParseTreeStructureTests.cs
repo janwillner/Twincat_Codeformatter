@@ -1,3 +1,5 @@
+using TcFormatter.Formatting;
+
 namespace TcFormatter.Core.Tests;
 
 /// <summary>Block structure and statement ends come from the parse tree, not from how a word is spelled.</summary>
@@ -32,6 +34,17 @@ public class ParseTreeStructureTests : FormatterTestBase
     {
         // __DELETE is part of the expression according to the parse tree; it was missing from a hand-kept keyword list
         Assert.Equal("__DELETE(pData);", Impl(Lines("__DELETE(", "pData);"), o => o.KeepExistingLineBreaks = false));
+    }
+
+    [Fact]
+    public void The_call_at_the_end_of_a_chain_is_wrapped_like_any_call()
+    {
+        var result = Impl("fbAxis.M_Get(1).M_Move(lrPos := 10.0, lrVelo := 5.0);", o => o.CallLineBreakMode = LineBreakMode.Always);
+
+        Assert.Equal(Lines(
+            "fbAxis.M_Get(1).M_Move(",
+            "    lrPos  := 10.0,",
+            "    lrVelo := 5.0);"), result);
     }
 
     [Fact]

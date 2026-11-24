@@ -296,10 +296,10 @@ namespace TcFormatter.Formatting
 
             if (line.InDeclarationSection)
                 r.Decl = ParseDeclaration(r.Code);
-            else if (line.IsEnumMember)
-                r.Enum = ParseEnum(r.Code);
             else if (line.IsStatement)
                 ParseAssignment(r);
+            else
+                r.Enum = ParseEnum(r.Code);
         }
 
         private string IndentString(int levels)
@@ -478,21 +478,19 @@ namespace TcFormatter.Formatting
 
         // ------------------------------------------------------------------ enums (one value per source line)
 
+        /// <summary>A line that holds exactly one enum value "Name [:= value][,]" (from the parse tree), or null.</summary>
         private EnumParts ParseEnum(List<Token> code)
         {
-            if (code.Count == 0 || code[0].Kind != TokenKind.Identifier)
+            if (code.Count == 0 || !_roles.EnumMembers.TryGetValue(code[0], out var member))
                 return null;
-            bool comma = code[code.Count - 1].IsOperator(",");
-            int end = comma ? code.Count - 1 : code.Count;
-            if (end == 1)
+            int end = code.IndexOf(member.Last) + 1;
+            bool comma = end > 0 && end < code.Count && code[end].IsOperator(",");
+            if (end <= 0 || end + (comma ? 1 : 0) != code.Count)
+                return null;
+            if (member.Assign == null)
                 return new EnumParts { Name = code[0].Text, Comma = comma };
-            if (end < 3 || !code[1].IsOperator(":="))
+            if (code.IndexOf(member.Assign) != 1 || end < 3)
                 return null;
-            for (int i = 2; i < end; i++)
-            {
-                if (code[i].IsOperator(","))
-                    return null;
-            }
             return new EnumParts { Name = code[0].Text, Value = Join(code, 2, end), Comma = comma };
         }
 
@@ -705,11 +703,11 @@ namespace TcFormatter.Formatting
 
             ListShape shape = null;
             if (line.IsStatement)
-                shape = ListShape.Call(line.Tokens);
+                shape = ListShape.Call(line.Tokens, _roles);
             else if (line.InDeclarationSection)
-                shape = ListShape.Initializer(line.Tokens);
-            else if (line.IsTypeHeader)
-                shape = ListShape.Enum(line.Tokens);
+                shape = ListShape.Initializer(line.Tokens, _roles);
+            else
+                shape = ListShape.Enum(line.Tokens, _roles);
             if (shape == null)
                 return null;
 

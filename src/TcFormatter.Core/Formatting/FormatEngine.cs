@@ -369,11 +369,8 @@ namespace TcFormatter.Formatting
 
             line.Indent = Math.Max(0, level);
             line.IsContinuation = continuation;
-            line.IsEnumMember = _part == CodePart.Declaration && !InDeclarationStatementContext && _paren == 1 &&
-                                first.Kind == TokenKind.Identifier;
             line.InDeclarationSection = !continuation && InDeclarationStatementContext;
             line.IsStatement = !continuation && _part == CodePart.Implementation;
-            line.IsTypeHeader = !continuation && _part == CodePart.Declaration && IsTypeStart(first);
 
             WalkTokens(lines, index, line.Indent, caseLabelColon);
             line.FrameId = Top?.Id ?? 0;
@@ -383,9 +380,8 @@ namespace TcFormatter.Formatting
                 _afterPouHeader = !continuation && _roles.PouHeaderKeywords.Contains(firstCode);
         }
 
-        /// <summary>"TYPE name :" or, after a line break behind TYPE, "name :" directly inside TYPE.</summary>
-        private bool IsTypeStart(Token first) =>
-            first.IsKeyword("TYPE") || (Top != null && Top.Kind == FrameKind.Type && _paren == 0 && first.Kind == TokenKind.Identifier);
+        /// <summary>"TYPE name :" or, after a line break behind TYPE, "name :" (from the parse tree).</summary>
+        private bool IsTypeStart(Token first) => _roles.TypeDefinitionStarts.Contains(first);
 
         private static Line NextCodeLine(List<Line> lines, int index)
         {
@@ -869,7 +865,7 @@ namespace TcFormatter.Formatting
                     return;
                 if (!JoinUntilSemicolon(lines, index, out var merged, out int last))
                     return;
-                if (_o.CallLineBreakMode != LineBreakMode.Preserve && ListShape.Call(merged) != null)
+                if (_o.CallLineBreakMode != LineBreakMode.Preserve && ListShape.Call(merged, _roles) != null)
                 {
                     Replace(lines, index, merged, last);
                     return;
@@ -883,14 +879,14 @@ namespace TcFormatter.Formatting
             {
                 if (_o.InitializerLineBreakMode == LineBreakMode.Preserve)
                     return;
-                if (JoinUntilSemicolon(lines, index, out var merged, out int last) && ListShape.Initializer(merged) != null)
+                if (JoinUntilSemicolon(lines, index, out var merged, out int last) && ListShape.Initializer(merged, _roles) != null)
                     Replace(lines, index, merged, last);
                 return;
             }
 
             if (IsTypeStart(first.Tokens[0]) && _o.EnumLineBreakMode != LineBreakMode.Preserve)
             {
-                if (JoinUntilSemicolon(lines, index, out var merged, out int last) && ListShape.Enum(merged) != null)
+                if (JoinUntilSemicolon(lines, index, out var merged, out int last) && ListShape.Enum(merged, _roles) != null)
                     Replace(lines, index, merged, last);
             }
         }
