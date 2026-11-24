@@ -125,7 +125,7 @@ public class ObjectProcessorTests
         var formatAndLint = ObjectProcessor.Process(obj, Config(), format: true, lint: true);
         var lintOnly = ObjectProcessor.Process(obj, Config(), format: false, lint: true);
 
-        Assert.Single(formatAndLint.Errors);
+        Assert.EndsWith("(names not checked)", Assert.Single(formatAndLint.Errors));
         Assert.Empty(formatAndLint.Naming);
         Assert.Empty(lintOnly.Errors);
         Assert.Equal(Naming.NamingRuleIds.SyntaxError, Assert.Single(lintOnly.Naming).Diagnostic.RuleId);

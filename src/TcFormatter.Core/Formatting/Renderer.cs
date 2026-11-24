@@ -392,12 +392,21 @@ namespace TcFormatter.Formatting
         /// </summary>
         private string AssignmentTarget(List<Token> tokens)
         {
-            if (tokens.Count == 0 || !_roles.Assignments.TryGetValue(tokens[0], out var a))
-                return null;
-            int i = tokens.IndexOf(a.Operator);
-            if (i <= 0 || tokens.Take(i).Any(t => t.IsComment || t.Kind == TokenKind.Pragma || IsAlignmentBlockingKeyword(t)))
+            int i = AssignmentOperatorIndex(tokens, out _);
+            if (i < 0 || tokens.Take(i).Any(t => t.IsComment || t.Kind == TokenKind.Pragma || IsAlignmentBlockingKeyword(t)))
                 return null;
             return Join(tokens, 0, i);
+        }
+
+        /// <summary>Index of the ':=' of the assignment statement that starts with tokens[0] (from the parse tree), or -1.</summary>
+        private int AssignmentOperatorIndex(List<Token> tokens, out Token end)
+        {
+            end = null;
+            if (tokens.Count == 0 || !_roles.Assignments.TryGetValue(tokens[0], out var a))
+                return -1;
+            end = a.End;
+            int i = tokens.IndexOf(a.Operator);
+            return i > 0 ? i : -1;
         }
 
         /// <summary>Lines with keywords (other than THIS / SUPER) are not aligned at their ':='.</summary>
@@ -521,12 +530,8 @@ namespace TcFormatter.Formatting
         private void ParseAssignment(RLine r)
         {
             var code = r.Code;
-            if (code.Count < 4 || !_roles.Assignments.TryGetValue(code[0], out var a) || code[code.Count - 1] != a.End)
-                return;
-            if (code.Any(IsAlignmentBlockingKeyword))
-                return;
-            int i = code.IndexOf(a.Operator);
-            if (i <= 0)
+            int i = AssignmentOperatorIndex(code, out var end);
+            if (code.Count < 4 || i < 0 || code[code.Count - 1] != end || code.Any(IsAlignmentBlockingKeyword))
                 return;
             r.AssignLeft = Join(code, 0, i);
             r.AssignRight = Join(code, i + 1, code.Count);

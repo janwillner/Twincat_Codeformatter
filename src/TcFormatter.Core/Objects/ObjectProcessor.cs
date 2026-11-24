@@ -95,7 +95,9 @@ namespace TcFormatter.Objects
                     if (format)
                         text = Format(obj, part, text, config, path, result, out syntaxError);
                     // a syntax error is already reported as Ablehnung of the formatter; the naming check would repeat it
-                    if (lint && part == CodePart.Declaration && !syntaxError)
+                    if (lint && part == CodePart.Declaration && syntaxError)
+                        result.Errors[result.Errors.Count - 1] += " (names not checked)";
+                    else if (lint && part == CodePart.Declaration)
                     {
                         string name = obj.Kind == PlcObjectKind.Gvl ? obj.Name : null;
                         string kind = obj.Kind == PlcObjectKind.Gvl ? "GVL" : null;

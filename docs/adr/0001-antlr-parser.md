@@ -15,8 +15,10 @@ dass der Nutzer davon mehr hat.
   ungültige Syntax.
 - **Der Lexer verliert keinen Text.** Leerzeichen, Zeilenumbrüche, Kommentare und Pragmas liegen auf dem
   Hidden-Channel, unbekannte Zeichen werden zu `ERROR_CHAR`. `Lexer.Tokenize` ist nur noch ein Adapter auf `Token`
-  und `TokenKind`, sodass Safety-Check, Renderer und Namensprüfung unverändert bleiben. Die Namensprüfung arbeitet
-  vorerst weiter auf Tokens; der Umzug auf den Parse-Baum ist ein eigenes Issue.
+  und `TokenKind`, sodass der Safety-Check unabhängig vom Parser bleibt.
+  _Nachtrag (#13, Branch deepen-modules):_ Renderer und Namensprüfung lesen inzwischen ebenfalls aus dem Parse-Baum
+  (`TokenRoles`, Deklarationen); eine Deklaration mit Syntaxfehler wird auch von der Namensprüfung abgelehnt
+  (TCN000). Das Layout bleibt token-basiert, wie oben entschieden.
 - **Die Grammatik muss echten TwinCAT-Code abdecken**, also mehr als IEC 61131-3. Was TwinCAT kompiliert, muss sie
   annehmen: leere Eingaben `x := ,`, ein Komma am Ende einer Argumentliste, mehrzeilige Strings, nackte
   Zugriffsmodifizierer vor den VAR-Blöcken eines Property-Accessors. Der Korpus-Test parst und formatiert ein großes

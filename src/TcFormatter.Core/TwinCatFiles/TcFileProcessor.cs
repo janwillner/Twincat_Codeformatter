@@ -138,7 +138,7 @@ namespace TcFormatter.TwinCatFiles
             return (baseLine + d.Line - 1, d.Line == 1 ? baseColumn + d.Column - 1 : d.Column);
         }
 
-        /// <summary>Adapter: the sections of one object inside the XML file. Writes are collected and applied by <see cref="Process"/>.</summary>
+        /// <summary>Adapter: the Code-Teile of one Objekt inside the XML file. Writes are collected and applied by <see cref="Process"/>.</summary>
         private sealed class XmlObject : IPlcObject
         {
             private readonly List<Section> _sections;
