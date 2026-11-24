@@ -71,6 +71,24 @@ public class LexerTests
             Assert.Equal((TokenKind.TypeName, type), (Lexer.Tokenize(type.ToLowerInvariant()).Single().Kind, type));
     }
 
+    [Fact]
+    public void Every_keyword_and_type_name_of_the_grammar_is_listed_in_the_language()
+    {
+        var vocabulary = TcFormatter.Syntax.Generated.StLexer.DefaultVocabulary;
+        for (int type = 1; type <= TcFormatter.Syntax.Generated.StLexer.ERROR_CHAR; type++)
+        {
+            string literal = vocabulary.GetLiteralName(type)?.Trim('\'');
+            var tokens = literal == null ? null : Lexer.Tokenize(literal);
+            if (tokens == null || tokens.Count != 1)
+                continue; // no literal, or one that needs context ("S=" only after an operand)
+            var kind = tokens[0].Kind;
+            if (kind == TokenKind.Keyword)
+                Assert.Contains(literal, StLanguage.Keywords);
+            else if (kind == TokenKind.TypeName)
+                Assert.Contains(literal, StLanguage.TypeNames);
+        }
+    }
+
     [Theory]
     [InlineData("bOut S= bSet;", "S=")]
     [InlineData("refX REF= nY;", "REF=")]
