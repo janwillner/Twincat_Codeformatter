@@ -5,7 +5,8 @@
  * and pragmas go to the HIDDEN channel, unknown characters become ERROR_CHAR. Concatenating the text of all
  * tokens reproduces the source. The formatter relies on that (see docs/adr/0001-antlr-parser.md).
  *
- * Keywords are case-insensitive. Keep the keyword and type name tokens in sync with Lexing/StLanguage.cs.
+ * Keywords are case-insensitive. Lexer.KindOf classifies tokens by ranges of this file: keywords from IF to ENDTRY,
+ * type names from BOOL to SYS_SYSTEM, operators from SET_ASSIGN to HASH. Add new words inside these ranges.
  */
 lexer grammar StLexer;
 

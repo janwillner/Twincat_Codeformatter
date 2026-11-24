@@ -28,6 +28,13 @@ public class ParseTreeStructureTests : FormatterTestBase
     }
 
     [Fact]
+    public void Statement_with_keywords_inside_its_expression_is_joined_like_any_other()
+    {
+        // __DELETE is part of the expression according to the parse tree; it was missing from a hand-kept keyword list
+        Assert.Equal("__DELETE(pData);", Impl(Lines("__DELETE(", "pData);"), o => o.KeepExistingLineBreaks = false));
+    }
+
+    [Fact]
     public void Member_named_like_a_type_keeps_its_case()
     {
         Assert.Equal("tStart := stLog.Time;", Impl("tStart:=stLog.Time;"));

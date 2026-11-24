@@ -38,7 +38,7 @@ namespace TcFormatter.Formatting
             foreach (var token in Lexer.Tokenize(text).Where(t => !t.IsTrivia))
             {
                 if (ignoreEndSemicolons && token.Text == ";" && previousKeyword != null &&
-                    StLanguage.EndKeywordsWithOptionalSemicolon.Contains(previousKeyword))
+                    FormatEngine.EndKeywordsWithOptionalSemicolon.Contains(previousKeyword))
                 {
                     previousKeyword = null;
                     continue;

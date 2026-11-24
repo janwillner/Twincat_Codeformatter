@@ -62,6 +62,18 @@ namespace TcFormatter.Syntax
         /// <summary>Assignment statements "target := value;" by their first token: the ':=' and the ';'.</summary>
         public Dictionary<Token, (Token Operator, Token End)> Assignments { get; } = new Dictionary<Token, (Token, Token)>();
 
+        /// <summary>Keywords that are part of an expression (AND, NOT, MOD, TRUE, THIS, __NEW, __DELETE, ...).</summary>
+        public HashSet<Token> ExpressionKeywords { get; } = new HashSet<Token>();
+
+        /// <summary>The first keyword of a POU header (FUNCTION_BLOCK, METHOD, PROPERTY, ...).</summary>
+        public HashSet<Token> PouHeaderKeywords { get; } = new HashSet<Token>();
+
+        /// <summary>The keyword that opens a VAR section (VAR, VAR_INPUT, VAR_GLOBAL, ...).</summary>
+        public HashSet<Token> VarSectionKeywords { get; } = new HashSet<Token>();
+
+        /// <summary>CONSTANT, RETAIN and PERSISTENT after a VAR section keyword.</summary>
+        public HashSet<Token> VarModifiers { get; } = new HashSet<Token>();
+
         public static TokenRoles From(ParseResult parse)
         {
             var collector = new Collector();
@@ -87,6 +99,10 @@ namespace TcFormatter.Syntax
             Fill(roles.StatementEnds, collector.StatementEnds, byIndex);
             Fill(roles.CaseLabelColonByFirstToken, collector.CaseLabelColons, byIndex);
             Fill(roles.JumpLabelColonByName, collector.JumpLabelColons, byIndex);
+            Fill(roles.ExpressionKeywords, collector.ExpressionKeywords, byIndex);
+            Fill(roles.PouHeaderKeywords, collector.PouHeaderKeywords, byIndex);
+            Fill(roles.VarSectionKeywords, collector.VarSectionKeywords, byIndex);
+            Fill(roles.VarModifiers, collector.VarModifiers, byIndex);
             roles.CaseLabelColons.UnionWith(roles.CaseLabelColonByFirstToken.Values);
             roles.JumpLabelColons.UnionWith(roles.JumpLabelColonByName.Values);
             foreach (var pair in collector.Declarations)
@@ -119,6 +135,29 @@ namespace TcFormatter.Syntax
             public HashSet<int> BlockKeywords { get; } = new HashSet<int>();
             public HashSet<int> StatementEnds { get; } = new HashSet<int>();
             public HashSet<int> Names { get; } = new HashSet<int>();
+            public HashSet<int> ExpressionKeywords { get; } = new HashSet<int>();
+            public HashSet<int> PouHeaderKeywords { get; } = new HashSet<int>();
+            public HashSet<int> VarSectionKeywords { get; } = new HashSet<int>();
+            public HashSet<int> VarModifiers { get; } = new HashSet<int>();
+
+            public override void EnterPouHeader(StParser.PouHeaderContext context) =>
+                PouHeaderKeywords.Add(context.Start.TokenIndex);
+
+            public override void EnterVarSectionKeyword(StParser.VarSectionKeywordContext context) =>
+                VarSectionKeywords.Add(context.Start.TokenIndex);
+
+            public override void EnterVarModifier(StParser.VarModifierContext context) =>
+                VarModifiers.Add(context.Start.TokenIndex);
+
+            private static bool InExpression(IParseTree node)
+            {
+                for (var parent = node.Parent; parent != null; parent = parent.Parent)
+                {
+                    if (parent is StParser.ExpressionContext)
+                        return true;
+                }
+                return false;
+            }
 
             /// <summary>Index of the first label token → index of the ':'.</summary>
             public Dictionary<int, int> CaseLabelColons { get; } = new Dictionary<int, int>();
@@ -168,6 +207,8 @@ namespace TcFormatter.Syntax
             {
                 if (node.Symbol.Type == StLexer.SEMI)
                     StatementEnds.Add(node.Symbol.TokenIndex);
+                else if (Lexing.Lexer.KindOf(node.Symbol.Type) == TokenKind.Keyword && InExpression(node))
+                    ExpressionKeywords.Add(node.Symbol.TokenIndex);
             }
 
             public override void EnterUnaryExpr(StParser.UnaryExprContext context)

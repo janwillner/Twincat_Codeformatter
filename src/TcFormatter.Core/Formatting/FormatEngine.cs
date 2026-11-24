@@ -20,11 +20,13 @@ namespace TcFormatter.Formatting
         private static readonly Regex FormatOff = new Regex(@"tcfmt\s*:\s*off\b|STweep\.Disable\b", RegexOptions.IgnoreCase);
         private static readonly Regex FormatOn = new Regex(@"tcfmt\s*:\s*on\b|STweep\.Enable\b", RegexOptions.IgnoreCase);
 
-        /// <summary>Keywords allowed inside statements that may be joined onto one line.</summary>
-        private static readonly HashSet<string> ExpressionKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        /// <summary>
+        /// END keywords whose ';' <see cref="FormatterOptions.EndKeywordSemicolon"/> adds or removes; the safety check
+        /// (<see cref="Equivalence"/>) tolerates exactly these.
+        /// </summary>
+        internal static readonly HashSet<string> EndKeywordsWithOptionalSemicolon = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "AND", "OR", "XOR", "NOT", "MOD", "AND_THEN", "OR_ELSE", "TRUE", "FALSE", "THIS", "SUPER",
-            "__NEW", "__QUERYINTERFACE", "__QUERYPOINTER", "__ISVALIDREF",
+            "END_IF", "END_CASE", "END_FOR", "END_WHILE", "END_REPEAT",
         };
 
         private readonly string _source;
@@ -283,11 +285,6 @@ namespace TcFormatter.Formatting
             _stack.RemoveRange(index, _stack.Count - index);
         }
 
-        private static readonly HashSet<string> PouHeaderKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "FUNCTION_BLOCK", "FUNCTION", "PROGRAM", "METHOD", "PROPERTY", "INTERFACE", "ACTION",
-        };
-
         /// <summary>The last code line was a POU header (FUNCTION_BLOCK ...): comments up to the first VAR follow it.</summary>
         private bool _afterPouHeader;
 
@@ -383,7 +380,7 @@ namespace TcFormatter.Formatting
 
             var firstCode = line.Tokens.FirstOrDefault(t => !t.IsComment && t.Kind != TokenKind.Pragma);
             if (firstCode != null)
-                _afterPouHeader = !continuation && firstCode.Kind == TokenKind.Keyword && PouHeaderKeywords.Contains(firstCode.Text);
+                _afterPouHeader = !continuation && _roles.PouHeaderKeywords.Contains(firstCode);
         }
 
         /// <summary>"TYPE name :" or, after a line break behind TYPE, "name :" directly inside TYPE.</summary>
@@ -626,12 +623,12 @@ namespace TcFormatter.Formatting
             bool expand = _o.ExpandSingleLineBlocks;
             string word = t.Upper;
 
-            if (StLanguage.VarSectionKeywords.Contains(word))
+            if (_roles.VarSectionKeywords.Contains(t))
             {
                 Push(FrameKind.Var, lineLevel);
                 _open = false;
                 int j = k + 1;
-                while (j < tokens.Count && (tokens[j].IsComment || (tokens[j].Kind == TokenKind.Keyword && StLanguage.VarModifiers.Contains(tokens[j].Text))))
+                while (j < tokens.Count && (tokens[j].IsComment || _roles.VarModifiers.Contains(tokens[j])))
                     j++;
                 // stop before trailing comments so they stay on the header line
                 int last = j - 1;
@@ -821,7 +818,7 @@ namespace TcFormatter.Formatting
             _conditionOpen = false;
             var keyword = tokens[k];
             bool hasSemicolon = k + 1 < tokens.Count && tokens[k + 1].IsOperator(";");
-            if (StLanguage.EndKeywordsWithOptionalSemicolon.Contains(keyword.Text))
+            if (EndKeywordsWithOptionalSemicolon.Contains(keyword.Text))
             {
                 if (_o.EndKeywordSemicolon == SemicolonStyle.Add && !hasSemicolon)
                 {
@@ -942,8 +939,8 @@ namespace TcFormatter.Formatting
         }
 
         /// <summary>No control keywords, pragmas or CASE labels (a bare ':').</summary>
-        private static bool IsSimpleStatement(List<Token> tokens) =>
-            tokens.All(t => t.Kind != TokenKind.Keyword || ExpressionKeywords.Contains(t.Text)) &&
+        private bool IsSimpleStatement(List<Token> tokens) =>
+            tokens.All(t => t.Kind != TokenKind.Keyword || _roles.ExpressionKeywords.Contains(t)) &&
             !tokens.Any(t => t.Kind == TokenKind.Pragma || t.IsOperator(":"));
 
         private bool FitsOnOneLine(List<Token> tokens, int level)
@@ -1034,7 +1031,7 @@ namespace TcFormatter.Formatting
 
         private static List<Token> CodeOf(List<Token> tokens) => tokens.Where(t => !t.IsComment).ToList();
 
-        private static bool IsSimpleIf(List<Token> tokens)
+        private bool IsSimpleIf(List<Token> tokens)
         {
             var code = CodeOf(tokens);
             if (code.Count < 6 || !code[0].IsKeyword("IF") || code.Any(t => t.Kind == TokenKind.Pragma))
@@ -1047,7 +1044,7 @@ namespace TcFormatter.Formatting
                 return false;
             for (int i = 1; i < then; i++)
             {
-                if (code[i].Kind == TokenKind.Keyword && !ExpressionKeywords.Contains(code[i].Text))
+                if (code[i].Kind == TokenKind.Keyword && !_roles.ExpressionKeywords.Contains(code[i]))
                     return false;
             }
 
@@ -1062,7 +1059,7 @@ namespace TcFormatter.Formatting
                     semicolon = i;
                     break;
                 }
-                else if (t.Kind == TokenKind.Keyword && !ExpressionKeywords.Contains(t.Text))
+                else if (t.Kind == TokenKind.Keyword && !_roles.ExpressionKeywords.Contains(t))
                     return false;
             }
             if (semicolon <= then + 1 || semicolon + 1 >= code.Count || !code[semicolon + 1].IsKeyword("END_IF"))

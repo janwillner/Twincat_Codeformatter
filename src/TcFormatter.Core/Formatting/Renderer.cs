@@ -923,7 +923,7 @@ namespace TcFormatter.Formatting
 
             if (_roles.ArgumentAssignments.Contains(b))
                 return _o.SpaceAroundAssignment && _o.SpaceBeforeArgumentAssignment ? 1 : 0;
-            if (StLanguage.IsAssignmentOperator(a) || StLanguage.IsAssignmentOperator(b))
+            if (IsAssignmentOperator(a) || IsAssignmentOperator(b))
                 return _o.SpaceAroundAssignment ? 1 : 0;
 
             if (_roles.UnaryOperators.Contains(a))
@@ -933,6 +933,11 @@ namespace TcFormatter.Formatting
 
             return 1;
         }
+
+        /// <summary>Assignment operators: := => S= R= REF= (the lexer makes S=, R=, REF= one token only after an operand).</summary>
+        private static bool IsAssignmentOperator(Token t) =>
+            t.Kind == TokenKind.Operator &&
+            (t.Text == ":=" || t.Text == "=>" || (t.Text.Length > 1 && t.Text.EndsWith("=", StringComparison.Ordinal) && char.IsLetter(t.Text[0])));
 
         private static bool IsOperandEnd(Token t) =>
             t.Kind == TokenKind.Identifier || t.Kind == TokenKind.TypeName ||
