@@ -59,26 +59,9 @@ namespace TcFormatter.Formatting
             _roles = TokenRoles.From(parse);
         }
 
-        /// <summary>Prefix '+' and '-' (from the parse tree).</summary>
-        internal HashSet<Token> UnaryOperators { get; } = new HashSet<Token>();
-
-        /// <summary>The ':' of CASE labels at the start of a line (found through the parse tree).</summary>
-        internal HashSet<Token> CaseLabelColons { get; } = new HashSet<Token>();
-
-        /// <summary>The ':' of jump labels ("lbl_End:"); they end a statement like case labels.</summary>
-        internal HashSet<Token> JumpLabelColons { get; } = new HashSet<Token>();
-
-        /// <summary>':=' and '=>' of named call arguments, FB / struct initialisation and enum values (from the parse tree).</summary>
-        internal HashSet<Token> ArgumentAssignments { get; } = new HashSet<Token>();
-
-        /// <summary>Tokens that were preceded by whitespace in the source (used for unknown characters).</summary>
-        internal HashSet<Token> SpaceBefore { get; } = new HashSet<Token>();
-
         public string Run()
         {
             var tokens = _roles.Tokens;
-            UnaryOperators.UnionWith(_roles.UnaryOperators);
-            ArgumentAssignments.UnionWith(_roles.ArgumentAssignments);
             if (CommentLineEndMarkers.Enabled(_o))
             {
                 for (int i = 0; i < tokens.Count; i++)
@@ -106,7 +89,7 @@ namespace TcFormatter.Formatting
             for (int i = 0; i < lines.Count; i++)
                 ProcessLine(lines, i);
 
-            var renderer = new Renderer(_o, UnaryOperators, CaseLabelColons, JumpLabelColons, ArgumentAssignments, SpaceBefore);
+            var renderer = new Renderer(_o, _roles);
             var physical = renderer.Render(lines);
 
             var sb = new StringBuilder();
@@ -185,24 +168,16 @@ namespace TcFormatter.Formatting
                 original.Clear();
             }
 
-            bool afterSpace = false;
             foreach (var token in tokens)
             {
                 if (token.Kind == TokenKind.Newline)
                 {
                     Finish();
-                    afterSpace = false;
                     continue;
                 }
                 original.Append(token.Text);
                 if (token.Kind == TokenKind.Whitespace)
-                {
-                    afterSpace = true;
                     continue;
-                }
-                if (afterSpace)
-                    SpaceBefore.Add(token);
-                afterSpace = false;
                 current.Tokens.Add(token);
             }
             if (current.Tokens.Count > 0)
@@ -601,7 +576,6 @@ namespace TcFormatter.Formatting
                                 // jump label "lbl_End:" outside of CASE
                                 _open = false;
                                 structural = true;
-                                JumpLabelColons.Add(t);
                             }
                             else if (k == caseLabelColon)
                             {
@@ -609,7 +583,6 @@ namespace TcFormatter.Formatting
                                 structural = true;
                                 opensBlock = true;
                                 Top.CaseInBody = true;
-                                CaseLabelColons.Add(t);
                                 if (_o.CaseStatementOnNewLine)
                                     splitAfter = k;
                             }

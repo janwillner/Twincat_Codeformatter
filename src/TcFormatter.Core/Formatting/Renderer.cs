@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using TcFormatter.Lexing;
+using TcFormatter.Syntax;
 
 namespace TcFormatter.Formatting
 {
@@ -18,21 +19,14 @@ namespace TcFormatter.Formatting
         };
 
         private readonly FormatterOptions _o;
-        private readonly HashSet<Token> _unary;
-        private readonly HashSet<Token> _caseColons;
-        private readonly HashSet<Token> _jumpColons;
-        private readonly HashSet<Token> _argumentAssignments;
-        private readonly HashSet<Token> _spaceBefore;
 
-        public Renderer(FormatterOptions options, HashSet<Token> unary, HashSet<Token> caseColons, HashSet<Token> jumpColons,
-                        HashSet<Token> argumentAssignments, HashSet<Token> spaceBefore)
+        /// <summary>What the parse tree says about the tokens (unary operators, label colons, argument assignments, ...).</summary>
+        private readonly TokenRoles _roles;
+
+        public Renderer(FormatterOptions options, TokenRoles roles)
         {
             _o = options;
-            _unary = unary;
-            _caseColons = caseColons;
-            _jumpColons = jumpColons;
-            _argumentAssignments = argumentAssignments;
-            _spaceBefore = spaceBefore;
+            _roles = roles;
         }
 
         private string Assign => _o.SpaceAroundAssignment ? " := " : ":=";
@@ -151,6 +145,7 @@ namespace TcFormatter.Formatting
             public bool MultiLine;
         }
 
+        // which block keyword (according to the parse tree) starts or ends a statement with a body
         private static readonly HashSet<string> BodyKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "IF", "CASE", "FOR", "WHILE", "REPEAT",
@@ -245,9 +240,9 @@ namespace TcFormatter.Formatting
                     element.Kind = ElementKind.Comment;
                     element.MultiLine = source.Tokens.Any(t => t.Text.IndexOf('\n') >= 0);
                 }
-                else if (firstToken.Kind == TokenKind.Keyword && BodyKeywords.Contains(firstToken.Text))
+                else if (_roles.BlockKeywords.Contains(firstToken) && BodyKeywords.Contains(firstToken.Text))
                     element.Kind = ElementKind.StatementWithBody;
-                else if (firstToken.Kind == TokenKind.Keyword && BodyEndKeywords.Contains(firstToken.Text))
+                else if (_roles.BlockKeywords.Contains(firstToken) && BodyEndKeywords.Contains(firstToken.Text))
                     element.Kind = ElementKind.EndOfBody;
                 else if (firstToken.IsKeyword("END_VAR"))
                     element.Kind = ElementKind.EndVar;
@@ -369,34 +364,16 @@ namespace TcFormatter.Formatting
 
         // ------------------------------------------------------------------ declarations
 
+        /// <summary>A whole declaration "names : type := init;" on this line (found through the parse tree), or null.</summary>
         private DeclParts ParseDeclaration(List<Token> code)
         {
-            if (code.Count < 4 || !code[code.Count - 1].IsOperator(";"))
+            if (code.Count < 4 || !_roles.Declarations.TryGetValue(code[0], out var d) || code[code.Count - 1] != d.End)
                 return null;
-            int depth = 0, colon = -1, assign = -1;
-            for (int i = 0; i < code.Count - 1; i++)
-            {
-                var t = code[i];
-                if (t.Kind == TokenKind.Pragma || t.IsComment)
-                    return null;
-                if (t.Kind != TokenKind.Operator)
-                {
-                    if (colon < 0 && t.Kind == TokenKind.Keyword && !t.Is("AT"))
-                        return null;
-                    continue;
-                }
-                if (t.Text == "(" || t.Text == "[")
-                    depth++;
-                else if (t.Text == ")" || t.Text == "]")
-                    depth--;
-                else if (depth == 0 && t.Text == ":" && colon < 0)
-                    colon = i;
-                else if (depth == 0 && t.Text == ":=" && colon >= 0 && assign < 0)
-                    assign = i;
-                else if (depth == 0 && t.Text == ";")
-                    return null;
-            }
-            if (colon <= 0 || colon + 1 >= code.Count - 1)
+            if (code.Any(t => t.Kind == TokenKind.Pragma || t.IsComment))
+                return null;
+            int colon = code.IndexOf(d.Colon);
+            int assign = d.Assign == null ? -1 : code.IndexOf(d.Assign);
+            if (colon <= 0)
                 return null;
             int typeEnd = assign >= 0 ? assign : code.Count - 1;
             if (typeEnd <= colon + 1)
@@ -409,28 +386,23 @@ namespace TcFormatter.Formatting
             };
         }
 
-        /// <summary>Rendered text before the first top-level ':=' of a statement line, or null when it is no assignment.</summary>
+        /// <summary>
+        /// Rendered text before the ':=' of an assignment statement that starts this line (from the parse tree), or null.
+        /// Targets with comments, pragmas or keywords (other than THIS / SUPER) are not used for alignment.
+        /// </summary>
         private string AssignmentTarget(List<Token> tokens)
         {
-            int depth = 0;
-            for (int i = 0; i < tokens.Count; i++)
-            {
-                var t = tokens[i];
-                if (t.IsComment || t.Kind == TokenKind.Pragma)
-                    return null;
-                if (t.Kind == TokenKind.Keyword && !t.Is("THIS") && !t.Is("SUPER"))
-                    return null;
-                if (t.IsOperator("(") || t.IsOperator("["))
-                    depth++;
-                else if (t.IsOperator(")") || t.IsOperator("]"))
-                    depth--;
-                else if (depth == 0 && t.IsOperator(":="))
-                    return i == 0 ? null : Join(tokens, 0, i);
-                else if (depth == 0 && t.IsOperator("("))
-                    return null;
-            }
-            return null;
+            if (tokens.Count == 0 || !_roles.Assignments.TryGetValue(tokens[0], out var a))
+                return null;
+            int i = tokens.IndexOf(a.Operator);
+            if (i <= 0 || tokens.Take(i).Any(t => t.IsComment || t.Kind == TokenKind.Pragma || IsAlignmentBlockingKeyword(t)))
+                return null;
+            return Join(tokens, 0, i);
         }
+
+        /// <summary>Lines with keywords (other than THIS / SUPER) are not aligned at their ':='.</summary>
+        private static bool IsAlignmentBlockingKeyword(Token t) =>
+            t.Kind == TokenKind.Keyword && !(t.Is("THIS") || t.Is("SUPER"));
 
         private void AlignDeclarations(List<RLine> lines)
         {
@@ -545,29 +517,19 @@ namespace TcFormatter.Formatting
 
         // ------------------------------------------------------------------ statements
 
+        /// <summary>Splits a whole assignment statement on this line at its ':=' (from the parse tree).</summary>
         private void ParseAssignment(RLine r)
         {
             var code = r.Code;
-            if (code.Count < 4 || !code[code.Count - 1].IsOperator(";"))
+            if (code.Count < 4 || !_roles.Assignments.TryGetValue(code[0], out var a) || code[code.Count - 1] != a.End)
                 return;
-            int depth = 0;
-            for (int i = 0; i < code.Count; i++)
-            {
-                var t = code[i];
-                if (t.Kind == TokenKind.Keyword && !(t.Is("THIS") || t.Is("SUPER")))
-                    return;
-                if (t.IsOperator("[")) depth++;
-                else if (t.IsOperator("]")) depth--;
-                else if (depth == 0 && t.IsOperator("(")) return;
-                else if (depth == 0 && t.IsOperator(":="))
-                {
-                    if (i == 0)
-                        return;
-                    r.AssignLeft = Join(code, 0, i);
-                    r.AssignRight = Join(code, i + 1, code.Count);
-                    return;
-                }
-            }
+            if (code.Any(IsAlignmentBlockingKeyword))
+                return;
+            int i = code.IndexOf(a.Operator);
+            if (i <= 0)
+                return;
+            r.AssignLeft = Join(code, 0, i);
+            r.AssignRight = Join(code, i + 1, code.Count);
         }
 
         private void AlignAssignments(List<RLine> lines)
@@ -895,8 +857,6 @@ namespace TcFormatter.Formatting
 
         private int SpacingRule(Token a, Token b)
         {
-            if (a.Kind == TokenKind.Unknown || b.Kind == TokenKind.Unknown)
-                return _spaceBefore.Contains(b) ? 1 : 0;
             if (a.IsComment || b.IsComment || a.Kind == TokenKind.Pragma || b.Kind == TokenKind.Pragma)
                 return 1;
 
@@ -905,7 +865,7 @@ namespace TcFormatter.Formatting
 
             if (bt == ";")
                 return 0;
-            if (_o.SpaceAfterEmptyArgumentAssignment && _argumentAssignments.Contains(a) && (bt == "," || bt == ")"))
+            if (_o.SpaceAfterEmptyArgumentAssignment && _roles.ArgumentAssignments.Contains(a) && (bt == "," || bt == ")"))
                 return 1; // "PT:= ," as written by the TwinCAT input assistant
             if (bt == ",")
                 return _o.SpaceBeforeComma ? 1 : 0;
@@ -914,12 +874,12 @@ namespace TcFormatter.Formatting
             if (at == ";")
                 return 1;
 
-            if (_jumpColons.Contains(b))
+            if (_roles.JumpLabelColons.Contains(b))
                 return 0;
-            if (_caseColons.Contains(b))
+            if (_roles.CaseLabelColons.Contains(b))
                 return _o.SpaceBeforeCaseLabelColon == CaseLabelColonSpace.Always ||
                        (_o.SpaceBeforeCaseLabelColon == CaseLabelColonSpace.AfterNames && a.Kind == TokenKind.Identifier) ? 1 : 0;
-            if (_caseColons.Contains(a) || _jumpColons.Contains(a))
+            if (_roles.CaseLabelColons.Contains(a) || _roles.JumpLabelColons.Contains(a))
                 return 1;
             if (bt == ":")
                 return _o.SpaceBeforeColon ? 1 : 0;
@@ -941,7 +901,7 @@ namespace TcFormatter.Formatting
             {
                 if (IsOperandEnd(a) || (a.Kind == TokenKind.Keyword && a.Text.StartsWith("__", StringComparison.Ordinal)))
                     return _o.SpaceBeforeCallParenthesis ? 1 : 0;
-                if (_unary.Contains(a))
+                if (_roles.UnaryOperators.Contains(a))
                     return 0;
                 return 1;
             }
@@ -961,12 +921,12 @@ namespace TcFormatter.Formatting
             if (bt == "^")
                 return 0;
 
-            if (_argumentAssignments.Contains(b))
+            if (_roles.ArgumentAssignments.Contains(b))
                 return _o.SpaceAroundAssignment && _o.SpaceBeforeArgumentAssignment ? 1 : 0;
             if (StLanguage.IsAssignmentOperator(a) || StLanguage.IsAssignmentOperator(b))
                 return _o.SpaceAroundAssignment ? 1 : 0;
 
-            if (_unary.Contains(a))
+            if (_roles.UnaryOperators.Contains(a))
                 return 0;
             if ((at != null && BinaryOperators.Contains(at)) || (bt != null && BinaryOperators.Contains(bt)))
                 return _o.SpaceAroundOperators ? 1 : 0;

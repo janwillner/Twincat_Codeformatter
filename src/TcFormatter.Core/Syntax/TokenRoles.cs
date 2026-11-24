@@ -46,6 +46,22 @@ namespace TcFormatter.Syntax
         /// <summary>The ';' that end a statement, a declaration or a block (END_IF;).</summary>
         public HashSet<Token> StatementEnds { get; } = new HashSet<Token>();
 
+        /// <summary>The ':' of CASE labels (values of <see cref="CaseLabelColonByFirstToken"/>).</summary>
+        public HashSet<Token> CaseLabelColons { get; } = new HashSet<Token>();
+
+        /// <summary>The ':' of jump labels (values of <see cref="JumpLabelColonByName"/>).</summary>
+        public HashSet<Token> JumpLabelColons { get; } = new HashSet<Token>();
+
+        /// <summary>
+        /// Variable declarations "names : type := init;" by their first token: the ':', the ':=' of the initial value
+        /// (null without one, or for REF=) and the ';'.
+        /// </summary>
+        public Dictionary<Token, (Token Colon, Token Assign, Token End)> Declarations { get; } =
+            new Dictionary<Token, (Token, Token, Token)>();
+
+        /// <summary>Assignment statements "target := value;" by their first token: the ':=' and the ';'.</summary>
+        public Dictionary<Token, (Token Operator, Token End)> Assignments { get; } = new Dictionary<Token, (Token, Token)>();
+
         public static TokenRoles From(ParseResult parse)
         {
             var collector = new Collector();
@@ -71,6 +87,15 @@ namespace TcFormatter.Syntax
             Fill(roles.StatementEnds, collector.StatementEnds, byIndex);
             Fill(roles.CaseLabelColonByFirstToken, collector.CaseLabelColons, byIndex);
             Fill(roles.JumpLabelColonByName, collector.JumpLabelColons, byIndex);
+            roles.CaseLabelColons.UnionWith(roles.CaseLabelColonByFirstToken.Values);
+            roles.JumpLabelColons.UnionWith(roles.JumpLabelColonByName.Values);
+            foreach (var pair in collector.Declarations)
+            {
+                var (colon, assign, end) = pair.Value;
+                roles.Declarations[byIndex[pair.Key]] = (byIndex[colon], assign < 0 ? null : byIndex[assign], byIndex[end]);
+            }
+            foreach (var pair in collector.Assignments)
+                roles.Assignments[byIndex[pair.Key]] = (byIndex[pair.Value.Operator], byIndex[pair.Value.End]);
             return roles;
         }
 
@@ -100,6 +125,28 @@ namespace TcFormatter.Syntax
 
             /// <summary>Index of the label name → index of the ':'.</summary>
             public Dictionary<int, int> JumpLabelColons { get; } = new Dictionary<int, int>();
+
+            /// <summary>Index of the first token of a declaration → indexes of ':', ':=' (-1) and ';'.</summary>
+            public Dictionary<int, (int Colon, int Assign, int End)> Declarations { get; } = new Dictionary<int, (int, int, int)>();
+
+            /// <summary>Index of the first token of an assignment → indexes of ':=' and ';'.</summary>
+            public Dictionary<int, (int Operator, int End)> Assignments { get; } = new Dictionary<int, (int, int)>();
+
+            public override void EnterVarDeclaration(StParser.VarDeclarationContext context)
+            {
+                if (context.COLON() == null)
+                    return; // empty declaration ";"
+                var assign = context.initialization()?.ASSIGN();
+                Declarations[context.Start.TokenIndex] = (context.COLON().Symbol.TokenIndex,
+                    assign?.Symbol.TokenIndex ?? -1, context.SEMI().Symbol.TokenIndex);
+            }
+
+            public override void EnterAssignmentStatement(StParser.AssignmentStatementContext context)
+            {
+                var op = context.assignmentOperator().ASSIGN();
+                if (op != null)
+                    Assignments[context.Start.TokenIndex] = (op.Symbol.TokenIndex, context.SEMI().Symbol.TokenIndex);
+            }
 
             private static void Add(HashSet<int> set, ITerminalNode node)
             {
