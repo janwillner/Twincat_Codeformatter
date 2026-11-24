@@ -118,6 +118,20 @@ public class ObjectProcessorTests
     }
 
     [Fact]
+    public void A_syntax_error_in_the_declaration_is_reported_once()
+    {
+        var obj = new FakeObject("FB_A", PlcObjectKind.Other, "FUNCTION_BLOCK FB_A\nVAR\n\tnA : INT\nEND_VAR", null);
+
+        var formatAndLint = ObjectProcessor.Process(obj, Config(), format: true, lint: true);
+        var lintOnly = ObjectProcessor.Process(obj, Config(), format: false, lint: true);
+
+        Assert.Single(formatAndLint.Errors);
+        Assert.Empty(formatAndLint.Naming);
+        Assert.Empty(lintOnly.Errors);
+        Assert.Equal(Naming.NamingRuleIds.SyntaxError, Assert.Single(lintOnly.Naming).Diagnostic.RuleId);
+    }
+
+    [Fact]
     public void A_failing_object_is_reported_instead_of_stopping_the_run()
     {
         var obj = new FakeObject("FB_A", PlcObjectKind.Other, "FUNCTION_BLOCK FB_A", null) { ThrowOnRead = true };

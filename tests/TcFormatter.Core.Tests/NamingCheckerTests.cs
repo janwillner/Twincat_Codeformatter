@@ -12,6 +12,26 @@ public class NamingCheckerTests
     }
 
     [Fact]
+    public void A_declaration_with_a_syntax_error_is_refused_with_one_error()
+    {
+        var diagnostics = Check("FUNCTION_BLOCK FB_Motor\nVAR\n\tspeed : LREAL\nEND_VAR");
+
+        var d = Assert.Single(diagnostics);
+        Assert.Equal(NamingRuleIds.SyntaxError, d.RuleId);
+        Assert.Equal(NamingSeverity.Error, d.Severity);
+        Assert.Equal((4, 1), (d.Line, d.Column));
+        Assert.StartsWith("Syntax error, names not checked:", d.Message);
+    }
+
+    [Fact]
+    public void Positions_come_from_the_parsed_tokens()
+    {
+        var d = Assert.Single(Check("FUNCTION_BLOCK FB_Motor\r\nVAR\r\n\tspeed : LREAL;\r\nEND_VAR"));
+
+        Assert.Equal(("speed", 3, 2), (d.Name, d.Line, d.Column));
+    }
+
+    [Fact]
     public void Accepts_a_correctly_named_function_block()
     {
         var decl = """

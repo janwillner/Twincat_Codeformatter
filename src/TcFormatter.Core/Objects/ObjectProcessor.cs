@@ -91,9 +91,11 @@ namespace TcFormatter.Objects
                     if (!needed || !obj.Has(part))
                         continue;
                     string text = obj.Read(part);
+                    bool syntaxError = false;
                     if (format)
-                        text = Format(obj, part, text, config, path, result);
-                    if (lint && part == CodePart.Declaration)
+                        text = Format(obj, part, text, config, path, result, out syntaxError);
+                    // a syntax error is already reported as Ablehnung of the formatter; the naming check would repeat it
+                    if (lint && part == CodePart.Declaration && !syntaxError)
                     {
                         string name = obj.Kind == PlcObjectKind.Gvl ? obj.Name : null;
                         string kind = obj.Kind == PlcObjectKind.Gvl ? "GVL" : null;
@@ -115,9 +117,11 @@ namespace TcFormatter.Objects
             return result;
         }
 
-        private static string Format(IPlcObject obj, CodePart part, string text, TcFormatConfig config, string path, ObjectResult result)
+        private static string Format(IPlcObject obj, CodePart part, string text, TcFormatConfig config, string path, ObjectResult result,
+                                     out bool syntaxError)
         {
             var formatted = StFormatter.Format(text, part, config.Format);
+            syntaxError = formatted.SyntaxError != null;
             if (formatted.Error != null)
             {
                 result.Errors.Add($"{path} ({part}): {formatted.Error}");

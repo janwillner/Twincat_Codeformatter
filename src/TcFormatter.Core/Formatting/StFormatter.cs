@@ -15,11 +15,12 @@ namespace TcFormatter.Formatting
 
     public sealed class FormatResult
     {
-        public FormatResult(string text, bool changed, string error)
+        public FormatResult(string text, bool changed, string error, SyntaxError syntaxError = null)
         {
             Text = text;
             Changed = changed;
             Error = error;
+            SyntaxError = syntaxError;
         }
 
         /// <summary>Formatted text, or the unchanged input when <see cref="Error"/> is set.</summary>
@@ -27,8 +28,11 @@ namespace TcFormatter.Formatting
 
         public bool Changed { get; }
 
-        /// <summary>Set when formatting was refused (safety check failed or internal error). The input is returned unchanged.</summary>
+        /// <summary>Set when formatting was refused (syntax error, safety check failed or internal error). The input is returned unchanged.</summary>
         public string Error { get; }
+
+        /// <summary>The syntax error when the code was refused because it does not parse, otherwise null.</summary>
+        public SyntaxError SyntaxError { get; }
     }
 
     /// <summary>Entry point of the Structured Text formatter.</summary>
@@ -44,7 +48,7 @@ namespace TcFormatter.Formatting
             {
                 var parse = StSyntax.ParseTree(code, part);
                 if (parse.Error != null)
-                    return new FormatResult(code, false, "Syntax error, code left unchanged: " + parse.Error);
+                    return new FormatResult(code, false, "Syntax error, code left unchanged: " + parse.Error, parse.Error);
                 formatted = new FormatEngine(code, part, options, parse).Run();
             }
             catch (Exception ex)

@@ -21,6 +21,9 @@ namespace TcFormatter.Naming
 
     public static class NamingRuleIds
     {
+        /// <summary>The declaration has a syntax error, so its names are not checked (Ablehnung). Always an error.</summary>
+        public const string SyntaxError = "TCN000";
+
         /// <summary>POU / DUT / GVL / interface name prefix (FB_, F_, ST_, ...).</summary>
         public const string ObjectPrefix = "TCN001";
 
