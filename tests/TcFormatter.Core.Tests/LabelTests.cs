@@ -18,6 +18,13 @@ public class LabelTests : FormatterTestBase
             "    nA := 1);"), Impl(input, o => o.CallLineBreakMode = LineBreakMode.Preserve));
     }
 
+    [Fact]
+    public void Jump_label_followed_by_a_statement_on_the_same_line_is_a_label()
+    {
+        // the parser knows it is a label; the colon is not spaced like the colon of a declaration
+        Assert.Equal("lbl_End: nA := 1;", Impl("lbl_End:nA:=1;"));
+    }
+
     [Theory]
     [InlineData(CaseLabelColonSpace.None, "SEQ.INIT:", "10:")]
     [InlineData(CaseLabelColonSpace.Always, "SEQ.INIT :", "10 :")]

@@ -104,6 +104,26 @@ public class IndentationTests : FormatterTestBase
             "x := 1;"), Impl(input, o => o.CallLineBreakMode = LineBreakMode.Preserve));
     }
 
+    [Theory]
+    [InlineData(LineBreakMode.Long)]
+    [InlineData(LineBreakMode.LongOrMultiline)]
+    [InlineData(LineBreakMode.Always)]
+    [InlineData(LineBreakMode.Never)]
+    public void Call_with_a_trailing_comma_keeps_the_comma(LineBreakMode mode)
+    {
+        // TwinCAT accepts "fb(a := 1, b => x, );". Reshaping the call must not drop the last comma.
+        var input = Lines(
+            "fb_DelayPos(",
+            "vi_b_Enable := b_EnableDelayPos,",
+            "vi_lr_CycleTime := vi_lr_CycleTime,",
+            "vo_lr_DelayedSignal => a_lr_PredPos[0],",
+            ");");
+
+        var result = Impl(input, o => o.CallLineBreakMode = mode);
+
+        Assert.Contains("a_lr_PredPos[0],", result);
+    }
+
     [Fact]
     public void Indents_comments_and_pragmas_with_the_surrounding_code()
     {

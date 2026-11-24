@@ -1,3 +1,4 @@
+using TcFormatter.Configuration;
 using TcFormatter.Formatting;
 using TcFormatter.Naming;
 using TcFormatter.Syntax;
@@ -36,16 +37,36 @@ public class ParserCorpusTests
     [Fact]
     public void Local_test_project_parses_without_syntax_errors()
     {
+        AssertParses(LocalProjectFiles());
+    }
+
+    [Fact]
+    public void Local_test_project_formats_without_errors_and_is_stable()
+    {
+        var failures = new List<string>();
+        foreach (var file in LocalProjectFiles())
+        {
+            var first = TcFileProcessor.Process(File.ReadAllText(file), new TcFormatConfig(), format: true, lint: false);
+            failures.AddRange(first.Errors.Select(e => $"{Path.GetFileName(file)}: {e}"));
+            var second = TcFileProcessor.Process(first.Text, new TcFormatConfig(), format: true, lint: false);
+            if (second.Changed)
+                failures.Add($"{Path.GetFileName(file)}: a second run changes the result");
+        }
+
+        Assert.True(failures.Count == 0, $"{failures.Count} problems:\n" + string.Join("\n", failures.Take(40)));
+    }
+
+    /// <summary>The files of TestProject/PLC, or none when the project is not on this machine (it is not checked in).</summary>
+    private static List<string> LocalProjectFiles()
+    {
         var root = FindRepositoryRoot();
         var project = root == null ? null : Path.Combine(root, "TestProject", "PLC");
         if (project == null || !Directory.Exists(project))
-            return; // the project is not checked in
+            return new List<string>();
 
-        var files = TcFileProcessor.Extensions
+        return TcFileProcessor.Extensions
             .SelectMany(ext => Directory.GetFiles(project, "*" + ext, SearchOption.AllDirectories))
             .ToList();
-
-        AssertParses(files);
     }
 
     private static void AssertParses(IEnumerable<string> files)
