@@ -883,10 +883,14 @@ namespace TcFormatter.Formatting
             return spaces;
         }
 
+        /// <summary>
+        /// Written without a space, would a and b lex as other tokens? Only the texts count: the kind of a word can
+        /// depend on the parse tree (a keyword used as member name is an identifier).
+        /// </summary>
         private static bool WouldMerge(Token a, Token b)
         {
             var relexed = Lexer.Tokenize(a.Text + b.Text);
-            return relexed.Count != 2 || relexed[0].Text != a.Text || relexed[1].Kind != b.Kind;
+            return relexed.Count != 2 || relexed[0].Text != a.Text || relexed[1].Text != b.Text;
         }
 
         private int SpacingRule(Token a, Token b)

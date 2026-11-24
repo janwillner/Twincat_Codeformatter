@@ -329,7 +329,7 @@ namespace TcFormatter.Formatting
 
             var first = line.Tokens[0];
             line.StartsWithCloser = IsCloser(first);
-            bool thenOrDo = first.IsKeyword("THEN") || first.IsKeyword("DO");
+            bool thenOrDo = IsBlockKeyword(first) && (first.Is("THEN") || first.Is("DO"));
             if ((line.StartsWithCloser || thenOrDo) && _paren == 0)
                 _open = false;
 
@@ -427,7 +427,7 @@ namespace TcFormatter.Formatting
 
         private int LevelForStatementStart(Token first, bool isCaseLabel)
         {
-            if (first.Kind == TokenKind.Keyword)
+            if (IsBlockKeyword(first))
             {
                 switch (first.Upper)
                 {
@@ -468,11 +468,14 @@ namespace TcFormatter.Formatting
 
         private int LevelOf(Frame f) => f?.Level ?? BodyLevel();
 
-        private static bool IsCloser(Token t)
+        /// <summary>The token opens, continues or closes a block according to the parse tree (IF, THEN, END_VAR, ...).</summary>
+        private bool IsBlockKeyword(Token t) => _roles.BlockKeywords.Contains(t);
+
+        private bool IsCloser(Token t)
         {
             if (t.Kind == TokenKind.Pragma)
                 return IsEndRegion(t);
-            if (t.Kind != TokenKind.Keyword)
+            if (!IsBlockKeyword(t))
                 return false;
             switch (t.Upper)
             {
@@ -516,7 +519,7 @@ namespace TcFormatter.Formatting
         private bool SplitBefore(List<Token> tokens, int k)
         {
             var t = tokens[k];
-            if (t.Kind != TokenKind.Keyword)
+            if (!IsBlockKeyword(t))
                 return false;
             if (t.Is("THEN"))
                 return _o.LineBreakBeforeThen;
@@ -583,7 +586,7 @@ namespace TcFormatter.Formatting
                             _paren = Math.Max(0, _paren - 1);
                             break;
                         case ";":
-                            if (_paren == 0)
+                            if (_roles.StatementEnds.Contains(t))
                             {
                                 _open = false;
                                 _conditionOpen = false;
@@ -613,7 +616,7 @@ namespace TcFormatter.Formatting
                             break;
                     }
                 }
-                else if (t.Kind == TokenKind.Keyword)
+                else if (IsBlockKeyword(t))
                 {
                     int keywordSplit = -1;
                     structural = HandleKeyword(tokens, ref k, lineLevel, ref keywordSplit, ref opensBlock);
