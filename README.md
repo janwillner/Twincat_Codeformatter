@@ -207,9 +207,9 @@ Nicht automatisch prüfbar sind:
 
 - **TwinCAT 3.1.4026 (TcXaeShell 64 bit):** installiert und getestet. Formatieren von Objekt, Ordner und Projekt, Namensprüfung mit Fehlerliste, danach „Check all objects“ ohne Fehler.
 - **TwinCAT 3.1.4024 (TcXaeShell 32 bit):** Die VSIX ist dafür gebaut (Manifestziel `[15.0,17.0) x86`, VS SDK 15.0, Typbibliothek 3.3). Auf dem Entwicklungsrechner war 4024 aber nicht installiert, daher ist sie dort **noch nicht live getestet**.
-- **Unit-Tests:** `dotnet test`, über 400 Tests, darunter Golden-Files aus dem Testprojekt und Parser-Tests pro Sprachkonstrukt. Jeder Formatter-Test prüft automatisch auch die Idempotenz und dass die Eingabe ohne Syntaxfehler parst.
+- **Unit-Tests:** `dotnet test`, über 400 Tests, darunter Golden-Files aus echten TwinCAT-Dateien und Parser-Tests pro Sprachkonstrukt. Jeder Formatter-Test prüft automatisch auch die Idempotenz und dass die Eingabe ohne Syntaxfehler parst.
 - **Korpus-Test (lokal):** Liegt unter `TestProject/PLC/` ein großes TwinCAT-Projekt, parsen und formatieren die `ParserCorpusTests` jedes Objekt darin zweimal (keine Syntaxfehler, keine Ablehnung, stabil). Der Ordner wird von git ignoriert; ohne ihn sind die Tests leer. Mit `TCFMT_CORPUS_REPORT=<datei>` schreibt der Test alle Syntaxfehler samt Kontext in eine Datei.
-- **Integrationstest am Testprojekt** (`TestProject/`):
+- **Integrationstest in TwinCAT** (beliebiges PLC-Projekt, nicht eingecheckt):
   1. unordentlichen Code ins Projekt schreiben,
   2. `TcFormatter.FormatAll` ausführen,
   3. „Check all objects“ / Build muss 0 Fehler ergeben,
@@ -221,8 +221,7 @@ Nicht automatisch prüfbar sind:
 src/TcFormatter.Core    Grammatik, Parser, Formatter, Naming-Checker, Konfiguration (netstandard2.0 + net472, einzige Abhängigkeit Antlr4.Runtime.Standard)
 src/TcFormatter.Cli     tcfmt (net8.0)
 src/TcFormatter.Vsix    Extension (net472, VS SDK 15.0 → läuft in VS 15/16/17)
-tests/                  xUnit-Tests inkl. Golden-Files aus dem TwinCAT-Testprojekt
-TestProject/            TwinCAT-Projekt zum Testen (formatiert, baut mit 0 Fehlern)
+tests/                  xUnit-Tests inkl. Golden-Files aus TwinCAT-Dateien
 lib/TCatSysManagerLib   Interop aus TypeLib 3.3 (eingebettet, kompatibel mit 4024 und 4026)
 ```
 
