@@ -44,6 +44,50 @@ public class LexerTests
         }, tokens);
     }
 
+    [Fact]
+    public void String_literal_may_span_lines()
+    {
+        var tokens = Lexer.Tokenize("s := CONCAT('out of bounds.\n\t\tExpected: 0', x);").Where(t => !t.IsTrivia).ToList();
+
+        Assert.Equal((TokenKind.String, "'out of bounds.\n\t\tExpected: 0'"), (tokens[4].Kind, tokens[4].Text));
+        Assert.Equal(TokenKind.Identifier, tokens[6].Kind);
+    }
+
+    [Fact]
+    public void String_inside_a_pragma_may_span_lines()
+    {
+        var tokens = Lexer.Tokenize("{attribute 'TcLinkTo' := '.A := x;\n .B := y'}\nnA : INT;").Where(t => !t.IsTrivia).ToList();
+
+        Assert.Equal(TokenKind.Pragma, tokens[0].Kind);
+        Assert.Equal((TokenKind.Identifier, "nA"), (tokens[1].Kind, tokens[1].Text));
+    }
+
+    [Fact]
+    public void Every_keyword_and_type_name_of_the_language_is_classified()
+    {
+        foreach (var keyword in StLanguage.Keywords)
+            Assert.Equal((TokenKind.Keyword, keyword), (Lexer.Tokenize(keyword).Single().Kind, keyword));
+        foreach (var type in StLanguage.TypeNames)
+            Assert.Equal((TokenKind.TypeName, type), (Lexer.Tokenize(type.ToLowerInvariant()).Single().Kind, type));
+    }
+
+    [Theory]
+    [InlineData("bOut S= bSet;", "S=")]
+    [InlineData("refX REF= nY;", "REF=")]
+    [InlineData("a[1] R= b;", "R=")]
+    public void Set_reset_and_reference_assignment_after_an_operand_is_one_operator(string source, string op)
+    {
+        Assert.Contains(Lexer.Tokenize(source), t => t.Kind == TokenKind.Operator && t.Text == op);
+    }
+
+    [Theory]
+    [InlineData("IF S=5 THEN")]
+    [InlineData("fb(S=>bOut);")]
+    public void S_followed_by_equals_elsewhere_stays_an_identifier(string source)
+    {
+        Assert.Contains(Lexer.Tokenize(source), t => t.Kind == TokenKind.Identifier && t.Text == "S");
+    }
+
     [Theory]
     [InlineData("T#1s", TokenKind.TimeLiteral)]
     [InlineData("TIME#5m3s", TokenKind.TimeLiteral)]
