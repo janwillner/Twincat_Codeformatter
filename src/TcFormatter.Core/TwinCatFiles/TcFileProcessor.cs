@@ -156,8 +156,8 @@ namespace TcFormatter.TwinCatFiles
             }
         }
 
-        /// <summary>The Structured Text sections of a TwinCAT file: object path, declaration or implementation, code.</summary>
-        internal static IEnumerable<(string ObjectPath, CodePart Part, string Code)> CodeSections(string xml) =>
+        /// <summary>The code parts of a TwinCAT file: object path, declaration or implementation, code.</summary>
+        internal static IEnumerable<(string ObjectPath, CodePart Part, string Code)> CodeParts(string xml) =>
             FindSections(xml ?? string.Empty).Select(s => (s.ObjectPath, s.Part, s.Code));
 
         private static string Cdata(string text) => "<![CDATA[" + text.Replace("]]>", "]]]]><![CDATA[>") + "]]>";

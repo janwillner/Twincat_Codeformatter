@@ -499,10 +499,10 @@ namespace TcFormatter.Formatting
         private static bool IsEndRegion(Token t) => t.Kind == TokenKind.Pragma && PragmaWord(t) == "endregion";
 
         /// <summary>Index of the ':' of a jump label "name:" at the start of the line, or -1 (from the parse tree).</summary>
-        private int FindJumpLabelColon(List<Token> tokens) => FindLabelColon(tokens, _roles.JumpLabelColons);
+        private int FindJumpLabelColon(List<Token> tokens) => FindLabelColon(tokens, _roles.JumpLabelColonByName);
 
         /// <summary>Index of the ':' that ends the CASE labels at the start of the line, or -1 (from the parse tree).</summary>
-        private int FindCaseLabelColon(List<Token> tokens) => FindLabelColon(tokens, _roles.CaseLabelColons);
+        private int FindCaseLabelColon(List<Token> tokens) => FindLabelColon(tokens, _roles.CaseLabelColonByFirstToken);
 
         private static int FindLabelColon(List<Token> tokens, Dictionary<Token, Token> colonByFirstToken)
         {

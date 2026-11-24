@@ -244,6 +244,7 @@ primary
     | THIS
     | SUPER
     | SYS_SYSTEM                                       // __SYSTEM.TYPE_CLASS.TYPE_INT
+    | DIRECT_ADDRESS                                   // bOut := %IX0.1;
     | elementaryType                                  // TIME(), SIZEOF(INT), __NEW(INT, 10)
     | STRING
     | WSTRING

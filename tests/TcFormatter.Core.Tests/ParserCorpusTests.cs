@@ -73,12 +73,12 @@ public class ParserCorpusTests
     {
         var failures = new List<string>();
         var details = new List<string>();
-        int sections = 0;
+        int codeParts = 0;
         foreach (var file in files)
         {
-            foreach (var (objectPath, part, code) in TcFileProcessor.CodeSections(File.ReadAllText(file)))
+            foreach (var (objectPath, part, code) in TcFileProcessor.CodeParts(File.ReadAllText(file)))
             {
-                sections++;
+                codeParts++;
                 var errors = StSyntax.Parse(code, part);
                 if (errors.Count == 0)
                     continue;
@@ -94,7 +94,7 @@ public class ParserCorpusTests
             File.AppendAllLines(report, details);
 
         Assert.True(failures.Count == 0,
-            $"{failures.Count} of {sections} sections have syntax errors:\n" + string.Join("\n", failures.Take(60)));
+            $"{failures.Count} of {codeParts} code parts have syntax errors:\n" + string.Join("\n", failures.Take(60)));
     }
 
     private static string Context(string code, int line)

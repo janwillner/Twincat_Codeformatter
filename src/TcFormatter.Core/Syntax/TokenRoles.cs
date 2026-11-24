@@ -24,10 +24,10 @@ namespace TcFormatter.Syntax
         public HashSet<Token> UnaryOperators { get; } = new HashSet<Token>();
 
         /// <summary>First token of the labels of a CASE branch ("1, 2:", "E_State.Idle:") → the ':' that ends them.</summary>
-        public Dictionary<Token, Token> CaseLabelColons { get; } = new Dictionary<Token, Token>();
+        public Dictionary<Token, Token> CaseLabelColonByFirstToken { get; } = new Dictionary<Token, Token>();
 
         /// <summary>Name of a jump label ("lbl_End:") → its ':'.</summary>
-        public Dictionary<Token, Token> JumpLabelColons { get; } = new Dictionary<Token, Token>();
+        public Dictionary<Token, Token> JumpLabelColonByName { get; } = new Dictionary<Token, Token>();
 
         /// <summary>':=' and '=>' of named call arguments, FB initialisation, struct initialisation and enum values.</summary>
         public HashSet<Token> ArgumentAssignments { get; } = new HashSet<Token>();
@@ -82,10 +82,10 @@ namespace TcFormatter.Syntax
             }
 
             public override void EnterCaseBranch(StParser.CaseBranchContext context) =>
-                Add(_roles.CaseLabelColons, context.Start, context.COLON());
+                Add(_roles.CaseLabelColonByFirstToken, context.Start, context.COLON());
 
             public override void EnterLabelStatement(StParser.LabelStatementContext context) =>
-                Add(_roles.JumpLabelColons, context.Start, context.COLON());
+                Add(_roles.JumpLabelColonByName, context.Start, context.COLON());
 
             public override void EnterArgument(StParser.ArgumentContext context)
             {

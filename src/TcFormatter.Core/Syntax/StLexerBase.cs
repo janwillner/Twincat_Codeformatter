@@ -30,10 +30,14 @@ namespace TcFormatter.Syntax.Generated
             _lastSignificantType = TokenConstants.InvalidType;
         }
 
-        /// <summary>Predicate of SET_ASSIGN, RESET_ASSIGN and REF_ASSIGN; LA(1) is the character after the '='.</summary>
+        /// <summary>
+        /// Predicate of SET_ASSIGN, RESET_ASSIGN and REF_ASSIGN; LA(1) is the character after the '='. An operand ends
+        /// with a name, ')', ']' or '^'; in a declaration "r : REFERENCE TO INT REF= n;" also with a type name.
+        /// </summary>
         protected bool IsSetResetAssignment() =>
             InputStream.LA(1) != '>' &&
             (_lastSignificantType == StLexer.IDENTIFIER || _lastSignificantType == StLexer.RPAREN ||
-             _lastSignificantType == StLexer.RBRACKET || _lastSignificantType == StLexer.CARET);
+             _lastSignificantType == StLexer.RBRACKET || _lastSignificantType == StLexer.CARET ||
+             (_lastSignificantType >= StLexer.BOOL && _lastSignificantType <= StLexer.SYS_SYSTEM));
     }
 }

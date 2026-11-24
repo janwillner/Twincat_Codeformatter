@@ -35,6 +35,7 @@ public class ParserTests
     [InlineData("p := __NEW(FB_X(nA := 1)); __DELETE(p); n := SIZEOF(INT); t := TIME(); x := __SYSTEM.TYPE_CLASS.TYPE_INT;")]
     [InlineData("st := (nA := 1, stB := (nC := 2)); a := [1, 2, 3];")]
     [InlineData("{region 'r'} x := 1; {endregion} (* c (* nested *) *) // line\n /* c */ ;;")]
+    [InlineData("bOut := %IX0.1; %QW2 := nValue;")]
     [InlineData("")]
     public void Implementation_constructs_parse(string code)
     {
@@ -56,6 +57,10 @@ public class ParserTests
     [InlineData("TYPE ST_Data EXTENDS ST_Base :\nSTRUCT\n\tnA : INT;\nEND_STRUCT\nEND_TYPE")]
     [InlineData("TYPE U_Value :\nUNION\n\tnA : INT;\n\tlr : LREAL;\nEND_UNION\nEND_TYPE")]
     [InlineData("TYPE T_Name : STRING(80); END_TYPE")]
+    [InlineData("VAR\n\tr : REFERENCE TO INT REF= n;\n\trs : REFERENCE TO STRING(80) REF= s;\nEND_VAR")]
+    [InlineData("METHOD INTERNAL M_X\nVAR_OUTPUT\n\tbDone : BOOL;\nEND_VAR\nVAR_STAT\n\tnCalls : UDINT;\nEND_VAR\nVAR_INST\n\tnLast : INT;\nEND_VAR")]
+    [InlineData("PROGRAM P\nVAR_EXTERNAL\n\tnGlobal : INT;\nEND_VAR")]
+    [InlineData("VAR_CONFIG\n\tMAIN.fbX.bIn AT %IX1.0 : BOOL;\nEND_VAR")]
     public void Declaration_constructs_parse(string code)
     {
         Assert.Empty(StSyntax.Parse(code, CodePart.Declaration));
