@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="TcFormatter.6a1f5d0e-3c2b-4b8e-9f47-2d8c1e5a7b90" Version="1.0.0" Language="en-US" Publisher="Jan Willner" />
+    <Identity Id="TcFormatter.6a1f5d0e-3c2b-4b8e-9f47-2d8c1e5a7b90" Version="1.1.0" Language="en-US" Publisher="Jan Willner" />
     <DisplayName>TcFormatter</DisplayName>
     <Description xml:space="preserve">Code formatter and naming convention checker for TwinCAT 3 Structured Text. Formats single objects, folders or whole PLC projects. Configurable via Tools &gt; Options &gt; TcFormatter or a .tcformat.json file.</Description>
     <MoreInfo>https://github.com/janwillner/Twincat_Codeformatter</MoreInfo>
