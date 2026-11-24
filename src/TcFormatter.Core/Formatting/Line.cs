@@ -72,14 +72,10 @@ namespace TcFormatter.Formatting
         /// <summary>Line is a member declaration inside VAR / STRUCT / UNION.</summary>
         public bool InDeclarationSection { get; set; }
 
-        /// <summary>Line is an enum member inside TYPE ... ( ... ).</summary>
-        public bool IsEnumMember { get; set; }
 
         /// <summary>Line is a statement of the implementation (not a continuation).</summary>
         public bool IsStatement { get; set; }
 
-        /// <summary>Line starts with TYPE (implicit enum candidate).</summary>
-        public bool IsTypeHeader { get; set; }
 
         /// <summary>The line was joined from several source lines (a list that was already wrapped).</summary>
         public bool WasMultiline { get; set; }

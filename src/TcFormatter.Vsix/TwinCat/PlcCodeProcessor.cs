@@ -1,8 +1,8 @@
-using System;
 using System.Collections.Generic;
 using TcFormatter.Configuration;
 using TcFormatter.Formatting;
 using TcFormatter.Naming;
+using TcFormatter.Objects;
 using TCatSysManagerLib;
 
 namespace TcFormatter.Vsix.TwinCat
@@ -30,77 +30,55 @@ namespace TcFormatter.Vsix.TwinCat
         public List<string> ChangedObjects { get; } = new List<string>();
     }
 
-    /// <summary>Formats and/or checks one PLC object (declaration and Structured Text implementation).</summary>
+    /// <summary>Formats and / or checks one PLC object of the project tree with <see cref="ObjectProcessor"/>.</summary>
     internal static class PlcCodeProcessor
     {
         public static void Process(ITcSmTreeItem item, TcFormatConfig config, bool format, bool lint, ProcessSummary summary)
         {
-            string path = "?";
-            int type = -1;
-            try
-            {
-                path = item.PathName;
-                type = item.ItemType;
-                ProcessCore(item, path, type, config, format, lint, summary);
-            }
-            catch (Exception ex)
-            {
-                // one broken object must never stop the whole run
-                summary.Errors.Add($"{path} (item type {type}): {ex.GetType().Name}: {ex.Message}");
-            }
-        }
-
-        private static void ProcessCore(ITcSmTreeItem item, string path, int type, TcFormatConfig config, bool format, bool lint, ProcessSummary summary)
-        {
-            string name = item.Name;
             summary.Objects++;
-            bool changed = false;
-
-            if (PlcTree.HasDeclarationPart(type))
-            {
-                string text = PlcText.Read(item, PlcText.Declaration);
-                if (format)
-                    text = FormatPart(item, text, CodePart.Declaration, PlcText.Declaration, config, path, summary, ref changed);
-                if (lint)
-                {
-                    foreach (var d in NamingChecker.Check(text, config.Naming, name, PlcTree.KindForNaming(type)))
-                        summary.Naming.Add(new NamingIssue(path, "Declaration", d));
-                }
-            }
-
-            if (format && PlcTree.HasImplementationPart(type) && PlcText.IsStructuredText(item))
-            {
-                string text = PlcText.Read(item, PlcText.Implementation);
-                FormatPart(item, text, CodePart.Implementation, PlcText.Implementation, config, path, summary, ref changed);
-            }
-
-            if (lint && type == PlcTree.Action)
-            {
-                foreach (var d in NamingChecker.CheckObjectName(name, "ACTION", config.Naming))
-                    summary.Naming.Add(new NamingIssue(path, "Name", d));
-            }
-
-            if (changed)
+            var obj = new TreeItemObject(item);
+            var result = ObjectProcessor.Process(obj, config, format, lint);
+            summary.Errors.AddRange(result.Errors);
+            foreach (var finding in result.Naming)
+                summary.Naming.Add(new NamingIssue(obj.Path, finding.PartLabel, finding.Diagnostic));
+            if (result.Changed)
             {
                 summary.Changed++;
-                summary.ChangedObjects.Add(path);
+                summary.ChangedObjects.Add(obj.Path);
             }
         }
 
-        private static string FormatPart(ITcSmTreeItem item, string text, CodePart part, string property, TcFormatConfig config,
-                                         string path, ProcessSummary summary, ref bool changed)
+        /// <summary>Adapter: an item of the TwinCAT project tree, read and written through the Automation Interface.</summary>
+        private sealed class TreeItemObject : IPlcObject
         {
-            var result = StFormatter.Format(text, part, config.Format);
-            if (result.Error != null)
+            private readonly ITcSmTreeItem _item;
+            private int? _type;
+
+            public TreeItemObject(ITcSmTreeItem item)
             {
-                summary.Errors.Add($"{path} ({part}): {result.Error}");
-                return text;
+                _item = item;
             }
-            if (!result.Changed)
-                return text;
-            PlcText.Write(item, property, result.Text);
-            changed = true;
-            return result.Text;
+
+            // COM access can throw on broken objects; ObjectProcessor reports that, so nothing is read in the constructor
+            private int Type => _type ?? (_type = _item.ItemType).Value;
+
+            public string Path => _item.PathName;
+
+            public string Name => _item.Name;
+
+            public PlcObjectKind Kind => PlcTree.KindOf(Type);
+
+            public bool Has(CodePart part) =>
+                part == CodePart.Declaration
+                    ? PlcTree.HasDeclarationPart(Type)
+                    : PlcTree.HasImplementationPart(Type) && PlcText.IsStructuredText(_item);
+
+            public string Read(CodePart part) => PlcText.Read(_item, Property(part));
+
+            public void Write(CodePart part, string text) => PlcText.Write(_item, Property(part), text);
+
+            private static string Property(CodePart part) =>
+                part == CodePart.Declaration ? PlcText.Declaration : PlcText.Implementation;
         }
     }
 }

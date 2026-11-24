@@ -20,11 +20,13 @@ namespace TcFormatter.Formatting
         private static readonly Regex FormatOff = new Regex(@"tcfmt\s*:\s*off\b|STweep\.Disable\b", RegexOptions.IgnoreCase);
         private static readonly Regex FormatOn = new Regex(@"tcfmt\s*:\s*on\b|STweep\.Enable\b", RegexOptions.IgnoreCase);
 
-        /// <summary>Keywords allowed inside statements that may be joined onto one line.</summary>
-        private static readonly HashSet<string> ExpressionKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        /// <summary>
+        /// END keywords whose ';' <see cref="FormatterOptions.EndKeywordSemicolon"/> adds or removes; the safety check
+        /// (<see cref="Equivalence"/>) tolerates exactly these.
+        /// </summary>
+        internal static readonly HashSet<string> EndKeywordsWithOptionalSemicolon = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "AND", "OR", "XOR", "NOT", "MOD", "AND_THEN", "OR_ELSE", "TRUE", "FALSE", "THIS", "SUPER",
-            "__NEW", "__QUERYINTERFACE", "__QUERYPOINTER", "__ISVALIDREF",
+            "END_IF", "END_CASE", "END_FOR", "END_WHILE", "END_REPEAT",
         };
 
         private readonly string _source;
@@ -59,26 +61,9 @@ namespace TcFormatter.Formatting
             _roles = TokenRoles.From(parse);
         }
 
-        /// <summary>Prefix '+' and '-' (from the parse tree).</summary>
-        internal HashSet<Token> UnaryOperators { get; } = new HashSet<Token>();
-
-        /// <summary>The ':' of CASE labels at the start of a line (found through the parse tree).</summary>
-        internal HashSet<Token> CaseLabelColons { get; } = new HashSet<Token>();
-
-        /// <summary>The ':' of jump labels ("lbl_End:"); they end a statement like case labels.</summary>
-        internal HashSet<Token> JumpLabelColons { get; } = new HashSet<Token>();
-
-        /// <summary>':=' and '=>' of named call arguments, FB / struct initialisation and enum values (from the parse tree).</summary>
-        internal HashSet<Token> ArgumentAssignments { get; } = new HashSet<Token>();
-
-        /// <summary>Tokens that were preceded by whitespace in the source (used for unknown characters).</summary>
-        internal HashSet<Token> SpaceBefore { get; } = new HashSet<Token>();
-
         public string Run()
         {
             var tokens = _roles.Tokens;
-            UnaryOperators.UnionWith(_roles.UnaryOperators);
-            ArgumentAssignments.UnionWith(_roles.ArgumentAssignments);
             if (CommentLineEndMarkers.Enabled(_o))
             {
                 for (int i = 0; i < tokens.Count; i++)
@@ -106,7 +91,7 @@ namespace TcFormatter.Formatting
             for (int i = 0; i < lines.Count; i++)
                 ProcessLine(lines, i);
 
-            var renderer = new Renderer(_o, UnaryOperators, CaseLabelColons, JumpLabelColons, ArgumentAssignments, SpaceBefore);
+            var renderer = new Renderer(_o, _roles);
             var physical = renderer.Render(lines);
 
             var sb = new StringBuilder();
@@ -185,24 +170,16 @@ namespace TcFormatter.Formatting
                 original.Clear();
             }
 
-            bool afterSpace = false;
             foreach (var token in tokens)
             {
                 if (token.Kind == TokenKind.Newline)
                 {
                     Finish();
-                    afterSpace = false;
                     continue;
                 }
                 original.Append(token.Text);
                 if (token.Kind == TokenKind.Whitespace)
-                {
-                    afterSpace = true;
                     continue;
-                }
-                if (afterSpace)
-                    SpaceBefore.Add(token);
-                afterSpace = false;
                 current.Tokens.Add(token);
             }
             if (current.Tokens.Count > 0)
@@ -308,11 +285,6 @@ namespace TcFormatter.Formatting
             _stack.RemoveRange(index, _stack.Count - index);
         }
 
-        private static readonly HashSet<string> PouHeaderKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "FUNCTION_BLOCK", "FUNCTION", "PROGRAM", "METHOD", "PROPERTY", "INTERFACE", "ACTION",
-        };
-
         /// <summary>The last code line was a POU header (FUNCTION_BLOCK ...): comments up to the first VAR follow it.</summary>
         private bool _afterPouHeader;
 
@@ -397,23 +369,19 @@ namespace TcFormatter.Formatting
 
             line.Indent = Math.Max(0, level);
             line.IsContinuation = continuation;
-            line.IsEnumMember = _part == CodePart.Declaration && !InDeclarationStatementContext && _paren == 1 &&
-                                first.Kind == TokenKind.Identifier;
             line.InDeclarationSection = !continuation && InDeclarationStatementContext;
             line.IsStatement = !continuation && _part == CodePart.Implementation;
-            line.IsTypeHeader = !continuation && _part == CodePart.Declaration && IsTypeStart(first);
 
             WalkTokens(lines, index, line.Indent, caseLabelColon);
             line.FrameId = Top?.Id ?? 0;
 
             var firstCode = line.Tokens.FirstOrDefault(t => !t.IsComment && t.Kind != TokenKind.Pragma);
             if (firstCode != null)
-                _afterPouHeader = !continuation && firstCode.Kind == TokenKind.Keyword && PouHeaderKeywords.Contains(firstCode.Text);
+                _afterPouHeader = !continuation && _roles.PouHeaderKeywords.Contains(firstCode);
         }
 
-        /// <summary>"TYPE name :" or, after a line break behind TYPE, "name :" directly inside TYPE.</summary>
-        private bool IsTypeStart(Token first) =>
-            first.IsKeyword("TYPE") || (Top != null && Top.Kind == FrameKind.Type && _paren == 0 && first.Kind == TokenKind.Identifier);
+        /// <summary>"TYPE name :" or, after a line break behind TYPE, "name :" (from the parse tree).</summary>
+        private bool IsTypeStart(Token first) => _roles.TypeDefinitionStarts.Contains(first);
 
         private static Line NextCodeLine(List<Line> lines, int index)
         {
@@ -601,7 +569,6 @@ namespace TcFormatter.Formatting
                                 // jump label "lbl_End:" outside of CASE
                                 _open = false;
                                 structural = true;
-                                JumpLabelColons.Add(t);
                             }
                             else if (k == caseLabelColon)
                             {
@@ -609,7 +576,6 @@ namespace TcFormatter.Formatting
                                 structural = true;
                                 opensBlock = true;
                                 Top.CaseInBody = true;
-                                CaseLabelColons.Add(t);
                                 if (_o.CaseStatementOnNewLine)
                                     splitAfter = k;
                             }
@@ -653,12 +619,12 @@ namespace TcFormatter.Formatting
             bool expand = _o.ExpandSingleLineBlocks;
             string word = t.Upper;
 
-            if (StLanguage.VarSectionKeywords.Contains(word))
+            if (_roles.VarSectionKeywords.Contains(t))
             {
                 Push(FrameKind.Var, lineLevel);
                 _open = false;
                 int j = k + 1;
-                while (j < tokens.Count && (tokens[j].IsComment || (tokens[j].Kind == TokenKind.Keyword && StLanguage.VarModifiers.Contains(tokens[j].Text))))
+                while (j < tokens.Count && (tokens[j].IsComment || _roles.VarModifiers.Contains(tokens[j])))
                     j++;
                 // stop before trailing comments so they stay on the header line
                 int last = j - 1;
@@ -848,7 +814,7 @@ namespace TcFormatter.Formatting
             _conditionOpen = false;
             var keyword = tokens[k];
             bool hasSemicolon = k + 1 < tokens.Count && tokens[k + 1].IsOperator(";");
-            if (StLanguage.EndKeywordsWithOptionalSemicolon.Contains(keyword.Text))
+            if (EndKeywordsWithOptionalSemicolon.Contains(keyword.Text))
             {
                 if (_o.EndKeywordSemicolon == SemicolonStyle.Add && !hasSemicolon)
                 {
@@ -899,7 +865,7 @@ namespace TcFormatter.Formatting
                     return;
                 if (!JoinUntilSemicolon(lines, index, out var merged, out int last))
                     return;
-                if (_o.CallLineBreakMode != LineBreakMode.Preserve && ListShape.Call(merged) != null)
+                if (_o.CallLineBreakMode != LineBreakMode.Preserve && ListShape.Call(merged, _roles) != null)
                 {
                     Replace(lines, index, merged, last);
                     return;
@@ -913,14 +879,14 @@ namespace TcFormatter.Formatting
             {
                 if (_o.InitializerLineBreakMode == LineBreakMode.Preserve)
                     return;
-                if (JoinUntilSemicolon(lines, index, out var merged, out int last) && ListShape.Initializer(merged) != null)
+                if (JoinUntilSemicolon(lines, index, out var merged, out int last) && ListShape.Initializer(merged, _roles) != null)
                     Replace(lines, index, merged, last);
                 return;
             }
 
             if (IsTypeStart(first.Tokens[0]) && _o.EnumLineBreakMode != LineBreakMode.Preserve)
             {
-                if (JoinUntilSemicolon(lines, index, out var merged, out int last) && ListShape.Enum(merged) != null)
+                if (JoinUntilSemicolon(lines, index, out var merged, out int last) && ListShape.Enum(merged, _roles) != null)
                     Replace(lines, index, merged, last);
             }
         }
@@ -969,8 +935,8 @@ namespace TcFormatter.Formatting
         }
 
         /// <summary>No control keywords, pragmas or CASE labels (a bare ':').</summary>
-        private static bool IsSimpleStatement(List<Token> tokens) =>
-            tokens.All(t => t.Kind != TokenKind.Keyword || ExpressionKeywords.Contains(t.Text)) &&
+        private bool IsSimpleStatement(List<Token> tokens) =>
+            tokens.All(t => t.Kind != TokenKind.Keyword || _roles.ExpressionKeywords.Contains(t)) &&
             !tokens.Any(t => t.Kind == TokenKind.Pragma || t.IsOperator(":"));
 
         private bool FitsOnOneLine(List<Token> tokens, int level)
@@ -1061,7 +1027,7 @@ namespace TcFormatter.Formatting
 
         private static List<Token> CodeOf(List<Token> tokens) => tokens.Where(t => !t.IsComment).ToList();
 
-        private static bool IsSimpleIf(List<Token> tokens)
+        private bool IsSimpleIf(List<Token> tokens)
         {
             var code = CodeOf(tokens);
             if (code.Count < 6 || !code[0].IsKeyword("IF") || code.Any(t => t.Kind == TokenKind.Pragma))
@@ -1074,7 +1040,7 @@ namespace TcFormatter.Formatting
                 return false;
             for (int i = 1; i < then; i++)
             {
-                if (code[i].Kind == TokenKind.Keyword && !ExpressionKeywords.Contains(code[i].Text))
+                if (code[i].Kind == TokenKind.Keyword && !_roles.ExpressionKeywords.Contains(code[i]))
                     return false;
             }
 
@@ -1089,7 +1055,7 @@ namespace TcFormatter.Formatting
                     semicolon = i;
                     break;
                 }
-                else if (t.Kind == TokenKind.Keyword && !ExpressionKeywords.Contains(t.Text))
+                else if (t.Kind == TokenKind.Keyword && !_roles.ExpressionKeywords.Contains(t))
                     return false;
             }
             if (semicolon <= then + 1 || semicolon + 1 >= code.Count || !code[semicolon + 1].IsKeyword("END_IF"))

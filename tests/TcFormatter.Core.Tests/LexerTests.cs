@@ -62,31 +62,20 @@ public class LexerTests
         Assert.Equal((TokenKind.Identifier, "nA"), (tokens[1].Kind, tokens[1].Text));
     }
 
-    [Fact]
-    public void Every_keyword_and_type_name_of_the_language_is_classified()
+    [Theory]
+    // the first and last word of each range of the grammar: reordering StLexer.g4 must not change the kinds
+    [InlineData("if", TokenKind.Keyword)]
+    [InlineData("__ENDTRY", TokenKind.Keyword)]
+    [InlineData("VAR_CONFIG", TokenKind.Keyword)]
+    [InlineData("bool", TokenKind.TypeName)]
+    [InlineData("__SYSTEM", TokenKind.TypeName)]
+    [InlineData("?=", TokenKind.Operator)]
+    [InlineData("#", TokenKind.Operator)]
+    [InlineData("nCount", TokenKind.Identifier)]
+    [InlineData("@", TokenKind.Unknown)]
+    public void Classifies_words_and_operators_by_the_grammar(string source, TokenKind expected)
     {
-        foreach (var keyword in StLanguage.Keywords)
-            Assert.Equal((TokenKind.Keyword, keyword), (Lexer.Tokenize(keyword).Single().Kind, keyword));
-        foreach (var type in StLanguage.TypeNames)
-            Assert.Equal((TokenKind.TypeName, type), (Lexer.Tokenize(type.ToLowerInvariant()).Single().Kind, type));
-    }
-
-    [Fact]
-    public void Every_keyword_and_type_name_of_the_grammar_is_listed_in_the_language()
-    {
-        var vocabulary = TcFormatter.Syntax.Generated.StLexer.DefaultVocabulary;
-        for (int type = 1; type <= TcFormatter.Syntax.Generated.StLexer.ERROR_CHAR; type++)
-        {
-            string literal = vocabulary.GetLiteralName(type)?.Trim('\'');
-            var tokens = literal == null ? null : Lexer.Tokenize(literal);
-            if (tokens == null || tokens.Count != 1)
-                continue; // no literal, or one that needs context ("S=" only after an operand)
-            var kind = tokens[0].Kind;
-            if (kind == TokenKind.Keyword)
-                Assert.Contains(literal, StLanguage.Keywords);
-            else if (kind == TokenKind.TypeName)
-                Assert.Contains(literal, StLanguage.TypeNames);
-        }
+        Assert.Equal(expected, Lexer.Tokenize(source).Single().Kind);
     }
 
     [Theory]

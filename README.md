@@ -232,8 +232,14 @@ Lexer und Parser entstehen beim Build aus [StLexer.g4](src/TcFormatter.Core/Gram
 [StParser.g4](src/TcFormatter.Core/Grammar/StParser.g4) (ANTLR 4.13.1 über `Antlr4BuildTasks`). Java muss dafür nicht
 installiert sein: Beim ersten Build lädt das Paket ein JRE und das ANTLR-Jar herunter. Es gibt zwei Einstiegsregeln,
 `declarationPart` und `implementationPart`, eine pro Code-Teil. Die Gründe für den Aufbau stehen in
-[ADR 0001](docs/adr/0001-antlr-parser.md), die Begriffe in [GLOSSARY.md](GLOSSARY.md). Neue Schlüsselwörter und
-Typnamen gehören in die `.g4` **und** in `Lexing/StLanguage.cs`; ein Test prüft, dass beide übereinstimmen.
+[ADR 0001](docs/adr/0001-antlr-parser.md), die Begriffe in [GLOSSARY.md](GLOSSARY.md). Die Grammatik ist das
+einzige Vokabular: Neue Schlüsselwörter gehören nur in `StLexer.g4`, und zwar in den Bereich `IF` … `__ENDTRY`,
+neue Typnamen in den Bereich `BOOL` … `__SYSTEM`. `Lexer.KindOf` ordnet Tokens über diese Bereiche zu.
+
+Was der Parse-Baum über einen Code-Teil weiß, liefert `Syntax/TokenRoles` an Formatter und Renderer (Rollen, Blöcke,
+Deklarationen, Zuweisungen); die Namensprüfung liest Deklarationen direkt aus dem Baum. Ein Objekt (Code-Teile, Name,
+Art) verarbeitet `Objects/ObjectProcessor` für CLI und Extension gleich; `TcFileProcessor` (XML-Datei) und die
+Extension (TwinCAT-Projektbaum) sind nur Adapter.
 
 ### Build-Pipeline und Releases
 

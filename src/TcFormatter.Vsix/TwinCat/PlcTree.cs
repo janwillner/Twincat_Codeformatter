@@ -4,6 +4,7 @@ using System.Linq;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
+using TcFormatter.Objects;
 using TCatSysManagerLib;
 
 namespace TcFormatter.Vsix.TwinCat
@@ -432,17 +433,18 @@ namespace TcFormatter.Vsix.TwinCat
             return directory;
         }
 
-        public static string KindForNaming(int itemType)
+        /// <summary>Kind of a tree item as the naming rules need it (GVL and action names are not part of their text).</summary>
+        public static PlcObjectKind KindOf(int itemType)
         {
             switch (itemType)
             {
                 case Gvl:
                 case GvlParamList:
-                    return "GVL";
+                    return PlcObjectKind.Gvl;
                 case Action:
-                    return "ACTION";
+                    return PlcObjectKind.Action;
                 default:
-                    return null;
+                    return PlcObjectKind.Other;
             }
         }
 

@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using TcFormatter.Configuration;
 using TcFormatter.Formatting;
 using TcFormatter.Naming;
+using TcFormatter.Objects;
 
 namespace TcFormatter.TwinCatFiles
 {
@@ -29,7 +30,7 @@ namespace TcFormatter.TwinCatFiles
         /// <summary>Dotted object path inside the file, e.g. "FB_Motor.M_Start".</summary>
         public string ObjectPath { get; }
 
-        /// <summary>"Declaration" or "Implementation".</summary>
+        /// <summary>"Declaration", "Implementation" or "Name" (the object name itself, e.g. of an action).</summary>
         public string Part { get; }
 
         public NamingDiagnostic Diagnostic { get; }
@@ -75,23 +76,22 @@ namespace TcFormatter.TwinCatFiles
 
         public static TcFileResult Process(string xml, TcFormatConfig config, bool format, bool lint)
         {
-            config = config ?? new TcFormatConfig();
+            xml = xml ?? string.Empty;
             var result = new TcFileResult { Text = xml };
-            var sections = FindSections(xml ?? string.Empty);
+            var objects = FindSections(xml)
+                .GroupBy(s => s.ObjectPath)
+                .Select(g => new XmlObject(g.ToList()))
+                .ToList();
 
-            var replacements = new List<(Section Section, string Text)>();
-            if (format)
+            var findings = new List<(XmlObject Object, ObjectFinding Finding)>();
+            foreach (var obj in objects)
             {
-                foreach (var section in sections)
-                {
-                    var formatted = StFormatter.Format(section.Code, section.Part, config.Format);
-                    if (formatted.Error != null)
-                        result.Errors.Add($"{section.ObjectPath} ({section.Part}): {formatted.Error}");
-                    else if (formatted.Changed)
-                        replacements.Add((section, formatted.Text));
-                }
+                var processed = ObjectProcessor.Process(obj, config, format, lint);
+                result.Errors.AddRange(processed.Errors);
+                findings.AddRange(processed.Naming.Select(f => (obj, f)));
             }
 
+            var replacements = objects.SelectMany(o => o.Replacements).ToList();
             if (replacements.Count > 0)
             {
                 var sb = new StringBuilder(xml);
@@ -105,19 +105,25 @@ namespace TcFormatter.TwinCatFiles
                 result.SectionsFormatted = replacements.Count;
             }
 
-            if (lint)
+            if (findings.Count > 0)
             {
-                // lint the final text so that line numbers match the file as it is (or would be) written
-                var namedActions = new HashSet<string>();
-                foreach (var section in FindSections(result.Text))
-                    Lint(result.Text, section, section.Code, config.Naming, result, namedActions);
+                // positions refer to the file as it is (or would be) written
+                var written = FindSections(result.Text);
+                foreach (var (obj, finding) in findings)
+                {
+                    var section = written.FirstOrDefault(s => s.ObjectPath == obj.Path && (finding.Part == null || s.Part == finding.Part));
+                    var (line, column) = FilePosition(result.Text, section, finding.Diagnostic);
+                    result.Naming.Add(new ObjectDiagnostic(obj.Path, finding.PartLabel, finding.Diagnostic, line, column));
+                }
             }
             return result;
         }
 
-        private static void Lint(string xml, Section section, string code, NamingRules rules, TcFileResult result, HashSet<string> namedActions)
+        /// <summary>Line and column of a diagnostic in the file: the code starts after "&lt;![CDATA[".</summary>
+        private static (int Line, int Column) FilePosition(string xml, Section section, NamingDiagnostic d)
         {
-            // position of the code inside the file (after "<![CDATA[")
+            if (section == null)
+                return (0, 0);
             int codeStart = section.Start + 9;
             int baseLine = 1, lineStart = 0;
             for (int i = 0; i < codeStart && i < xml.Length; i++)
@@ -129,30 +135,39 @@ namespace TcFormatter.TwinCatFiles
                 }
             }
             int baseColumn = codeStart - lineStart + 1;
+            return (baseLine + d.Line - 1, d.Line == 1 ? baseColumn + d.Column - 1 : d.Column);
+        }
 
-            var owner = section.Owner?.Tag ?? string.Empty;
-            IReadOnlyList<NamingDiagnostic> diagnostics;
+        /// <summary>Adapter: the Code-Teile of one Objekt inside the XML file. Writes are collected and applied by <see cref="Process"/>.</summary>
+        private sealed class XmlObject : IPlcObject
+        {
+            private readonly List<Section> _sections;
+            private readonly Dictionary<CodePart, string> _texts = new Dictionary<CodePart, string>();
 
-            if (section.Part == CodePart.Declaration)
+            public XmlObject(List<Section> sections)
             {
-                string objectName = owner == "GVL" ? section.Owner.Name : null;
-                string objectKind = owner == "GVL" ? "GVL" : null;
-                diagnostics = NamingChecker.Check(code, rules, objectName, objectKind);
-            }
-            else if (owner == "Action" && namedActions.Add(section.ObjectPath))
-            {
-                diagnostics = NamingChecker.CheckObjectName(section.Owner.Name, "ACTION", rules);
-            }
-            else
-            {
-                return;
+                _sections = sections;
+                var owner = sections[0].Owner;
+                Path = sections[0].ObjectPath;
+                Name = owner?.Name;
+                Kind = owner?.Tag == "GVL" ? PlcObjectKind.Gvl : owner?.Tag == "Action" ? PlcObjectKind.Action : PlcObjectKind.Other;
             }
 
-            foreach (var d in diagnostics)
+            public string Path { get; }
+            public string Name { get; }
+            public PlcObjectKind Kind { get; }
+            public List<(Section Section, string Text)> Replacements { get; } = new List<(Section, string)>();
+
+            private Section SectionOf(CodePart part) => _sections.FirstOrDefault(s => s.Part == part);
+
+            public bool Has(CodePart part) => SectionOf(part) != null;
+
+            public string Read(CodePart part) => _texts.TryGetValue(part, out var text) ? text : SectionOf(part).Code;
+
+            public void Write(CodePart part, string text)
             {
-                int line = baseLine + d.Line - 1;
-                int column = d.Line == 1 ? baseColumn + d.Column - 1 : d.Column;
-                result.Naming.Add(new ObjectDiagnostic(section.ObjectPath, section.Part.ToString(), d, line, column));
+                _texts[part] = text;
+                Replacements.Add((SectionOf(part), text));
             }
         }
 

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using TcFormatter.Lexing;
+using TcFormatter.Syntax;
 
 namespace TcFormatter.Formatting
 {
@@ -8,7 +9,8 @@ namespace TcFormatter.Formatting
     /// <summary>
     /// A list in parentheses or brackets inside one logical line that may be wrapped one element per line:
     /// the arguments of a call statement, a structure / array / function block initializer of a declaration,
-    /// or the values of an implicit enum.
+    /// or the values of an enum. The list comes from the parse tree (<see cref="TokenRoles"/>); this class only maps it
+    /// to the positions in the line. Lines with comments or pragmas before the final ';' keep their layout.
     /// </summary>
     internal sealed class ListShape
     {
@@ -19,142 +21,48 @@ namespace TcFormatter.Formatting
         /// <summary>Token ranges [start, end) of the elements.</summary>
         public List<(int Start, int End)> Items { get; } = new List<(int, int)>();
 
-        public static ListShape Call(IList<Token> tokens)
+        /// <summary><c>[target :=] callee( arg, arg, ... );</c></summary>
+        public static ListShape Call(IList<Token> tokens, TokenRoles roles) =>
+            From(ListKind.Call, roles.Calls, tokens, tokens.Count > 0 ? tokens[0] : null);
+
+        /// <summary><c>name : TYPE := ( ... );</c>, <c>name : TYPE := [ ... ];</c>, <c>fb : FB_X( ... );</c> or <c>e : (A, B);</c></summary>
+        public static ListShape Initializer(IList<Token> tokens, TokenRoles roles) =>
+            From(ListKind.Initializer, roles.Initializers, tokens, tokens.Count > 0 ? tokens[0] : null);
+
+        /// <summary><c>TYPE name : ( A, B := 2 ) [BASETYPE] ;</c> or, after a line break behind TYPE, <c>name : ( ... );</c></summary>
+        public static ListShape Enum(IList<Token> tokens, TokenRoles roles)
         {
-            var call = CallShape.TryParse(tokens);
-            if (call == null)
+            if (tokens.Count == 0)
                 return null;
-            var shape = new ListShape { Kind = ListKind.Call, Open = call.OpenParen, Close = call.CloseParen };
-            shape.Items.AddRange(call.Arguments);
-            return shape;
+            var name = tokens[0].IsKeyword("TYPE") && tokens.Count > 1 ? tokens[1] : tokens[0];
+            return From(ListKind.Enum, roles.Enums, tokens, name);
         }
 
-        /// <summary><c>name : TYPE := ( ... );</c>, <c>name : TYPE := [ ... ];</c> or <c>fb : FB_X( ... );</c></summary>
-        public static ListShape Initializer(IList<Token> tokens)
+        private static ListShape From(ListKind kind, Dictionary<Token, ListSpan> spans, IList<Token> tokens, Token key)
         {
-            int end = LastCode(tokens);
-            if (end < 0 || !tokens[end].IsOperator(";"))
+            if (key == null || !spans.TryGetValue(key, out var span))
                 return null;
-
-            int depth = 0, colon = -1, assign = -1;
-            for (int i = 0; i < end; i++)
-            {
-                var t = tokens[i];
-                if (t.IsComment || t.Kind == TokenKind.Pragma)
-                    return null;
-                if (t.IsOperator("(") || t.IsOperator("[")) depth++;
-                else if (t.IsOperator(")") || t.IsOperator("]")) depth--;
-                else if (depth == 0 && t.IsOperator(":") && colon < 0) colon = i;
-                else if (depth == 0 && t.IsOperator(":=") && colon >= 0 && assign < 0) assign = i;
-            }
-            if (colon <= 0)
+            int end = tokens.IndexOf(span.End);
+            if (end < 0)
                 return null;
-
-            int open;
-            if (assign >= 0)
+            for (int k = 0; k < tokens.Count; k++)
             {
-                // the whole initializer is one list
-                open = assign + 1;
-                if (open >= end || !(tokens[open].IsOperator("(") || tokens[open].IsOperator("[")))
-                    return null;
-            }
-            else
-            {
-                // FB initialisation: the type ends with "(...)"
-                open = -1;
-                for (int i = colon + 1; i < end; i++)
-                {
-                    if (tokens[i].IsOperator("("))
-                    {
-                        open = i;
-                        break;
-                    }
-                    if (tokens[i].IsOperator("["))
-                        return null; // ARRAY[..] OF FB_X(...) is not supported
-                }
-                if (open < 0)
+                var t = tokens[k];
+                if (k < end ? t.IsComment || t.Kind == TokenKind.Pragma : k > end && !t.IsComment)
                     return null;
             }
 
-            var shape = new ListShape { Kind = ListKind.Initializer, Open = open };
-            if (!ReadItems(tokens, shape, end) || shape.Close != end - 1)
+            var shape = new ListShape { Kind = kind, Open = tokens.IndexOf(span.Open), Close = tokens.IndexOf(span.Close) };
+            if (shape.Open < 0 || shape.Close < 0)
                 return null;
-            return shape;
-        }
-
-        /// <summary><c>TYPE name : ( A, B := 2 ) [BASETYPE] ;</c></summary>
-        public static ListShape Enum(IList<Token> tokens)
-        {
-            int end = LastCode(tokens);
-            if (end < 3 || !tokens[end].IsOperator(";"))
-                return null;
-            // "TYPE name : (" or, after a line break behind TYPE, "name : ("
-            int i = tokens[0].IsKeyword("TYPE") ? 1 : 0;
-            if (tokens[i].Kind != TokenKind.Identifier)
-                return null;
-            while (i < end && !tokens[i].IsOperator(":"))
-                i++;
-            if (i + 1 >= end || !tokens[i + 1].IsOperator("("))
-                return null;
-            for (int k = 0; k < end; k++)
+            foreach (var (first, last) in span.Items)
             {
-                if (tokens[k].IsComment || tokens[k].Kind == TokenKind.Pragma)
+                int start = tokens.IndexOf(first), stop = tokens.IndexOf(last);
+                if (start < 0 || stop < start)
                     return null;
-            }
-
-            var shape = new ListShape { Kind = ListKind.Enum, Open = i + 1 };
-            if (!ReadItems(tokens, shape, end))
-                return null;
-            // after ')' only an optional base type
-            for (int k = shape.Close + 1; k < end; k++)
-            {
-                if (tokens[k].Kind != TokenKind.TypeName && tokens[k].Kind != TokenKind.Identifier)
-                    return null;
+                shape.Items.Add((start, stop + 1));
             }
             return shape;
-        }
-
-        private static bool ReadItems(IList<Token> tokens, ListShape shape, int end)
-        {
-            int depth = 0;
-            int itemStart = shape.Open + 1;
-            for (int j = shape.Open; j < end; j++)
-            {
-                var t = tokens[j];
-                if (t.IsComment || t.Kind == TokenKind.Pragma)
-                    return false;
-                if (t.IsOperator("(") || t.IsOperator("["))
-                {
-                    depth++;
-                }
-                else if (t.IsOperator(")") || t.IsOperator("]"))
-                {
-                    depth--;
-                    if (depth == 0)
-                    {
-                        if (j > itemStart)
-                            shape.Items.Add((itemStart, j));
-                        shape.Close = j;
-                        return shape.Items.Count > 0;
-                    }
-                }
-                else if (depth == 1 && t.IsOperator(","))
-                {
-                    if (j == itemStart)
-                        return false;
-                    shape.Items.Add((itemStart, j));
-                    itemStart = j + 1;
-                }
-            }
-            return false;
-        }
-
-        private static int LastCode(IList<Token> tokens)
-        {
-            int i = tokens.Count - 1;
-            while (i >= 0 && tokens[i].IsComment)
-                i--;
-            return i;
         }
     }
 }

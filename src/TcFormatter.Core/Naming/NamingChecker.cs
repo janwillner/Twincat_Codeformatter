@@ -2,19 +2,21 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using TcFormatter.Lexing;
+using Antlr4.Runtime;
+using Antlr4.Runtime.Tree;
+using TcFormatter.Formatting;
+using TcFormatter.Syntax;
+using TcFormatter.Syntax.Generated;
 
 namespace TcFormatter.Naming
 {
-    /// <summary>Checks the identifiers of one declaration text (POU, method, property, DUT, GVL, interface).</summary>
+    /// <summary>
+    /// Checks the identifiers of one declaration text (POU, method, property, DUT, GVL, interface). The declaration is
+    /// parsed; a declaration with a syntax error is refused with one <see cref="NamingRuleIds.SyntaxError"/> error.
+    /// </summary>
     public static class NamingChecker
     {
         private static readonly Regex IgnoreComment = new Regex(@"tcfmt\s*:\s*ignore-naming", RegexOptions.IgnoreCase);
-
-        private static readonly HashSet<string> AccessModifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "PUBLIC", "PRIVATE", "PROTECTED", "INTERNAL", "ABSTRACT", "FINAL",
-        };
 
         private static readonly HashSet<string> SystemMethods = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -46,7 +48,15 @@ namespace TcFormatter.Naming
             var result = new List<NamingDiagnostic>();
             if (rules == null || !rules.Enabled)
                 return result;
-            new Walker(declaration ?? string.Empty, rules, result).Run(objectName, objectKind);
+
+            var parse = StSyntax.ParseTree(declaration ?? string.Empty, CodePart.Declaration);
+            if (parse.Error != null)
+            {
+                result.Add(new NamingDiagnostic(NamingRuleIds.SyntaxError, NamingSeverity.Error, string.Empty,
+                    "Syntax error, names not checked: " + parse.Error.Message, parse.Error.Line, parse.Error.Column, null));
+                return result;
+            }
+            new Checker(rules, result, parse).Run((StParser.DeclarationPartContext)parse.Tree, objectName, objectKind);
             return result;
         }
 
@@ -56,40 +66,51 @@ namespace TcFormatter.Naming
             var result = new List<NamingDiagnostic>();
             if (rules == null || !rules.Enabled || string.IsNullOrEmpty(objectName))
                 return result;
-            new Walker(string.Empty, rules, result).CheckObject(objectKind, objectName, 1, 1);
+            new Checker(rules, result, null).CheckObject(objectKind, objectName, 1, 1);
             return result;
         }
 
-        private sealed class Walker
+        /// <summary>A name in the declaration with its 1-based position.</summary>
+        private readonly struct NameToken
         {
-            private readonly string _text;
+            public NameToken(IToken token)
+            {
+                Text = token.Text;
+                Line = token.Line;
+                Column = token.Column + 1;
+            }
+
+            public string Text { get; }
+            public int Line { get; }
+            public int Column { get; }
+        }
+
+        private sealed class Checker
+        {
             private readonly NamingRules _rules;
             private readonly List<NamingDiagnostic> _out;
-            private readonly List<Token> _tokens;
-            private readonly List<int> _lineStarts = new List<int> { 0 };
+            private readonly IList<IToken> _tokens;
             private readonly HashSet<int> _ignoredLines = new HashSet<int>();
             private readonly List<Regex> _ignore;
-            private int _i;
 
-            public Walker(string text, NamingRules rules, List<NamingDiagnostic> output)
+            /// <summary>Header keyword of the checked declaration (FUNCTION_BLOCK, METHOD, ...), or null.</summary>
+            private string _headerKind;
+
+            public Checker(NamingRules rules, List<NamingDiagnostic> output, ParseResult parse)
             {
-                _text = text;
                 _rules = rules;
                 _out = output;
-                for (int i = 0; i < text.Length; i++)
-                {
-                    if (text[i] == '\n')
-                        _lineStarts.Add(i + 1);
-                }
-                var all = Lexer.Tokenize(text);
-                foreach (var t in all.Where(t => t.IsComment && IgnoreComment.IsMatch(t.Text)))
-                    _ignoredLines.Add(LineOf(t.Position));
-                _tokens = all.Where(t => !t.IsTrivia && !t.IsComment && t.Kind != TokenKind.Pragma).ToList();
+                _tokens = parse?.Tokens ?? new List<IToken>();
+                foreach (var t in _tokens.Where(IsComment).Where(t => IgnoreComment.IsMatch(t.Text)))
+                    _ignoredLines.Add(t.Line);
                 _ignore = (rules.IgnoreNames ?? new List<string>())
                     .Select(TryRegex)
                     .Where(r => r != null)
                     .ToList();
             }
+
+            private static bool IsComment(IToken t) =>
+                t.Type == StLexer.LINE_COMMENT || t.Type == StLexer.BLOCK_COMMENT || t.Type == StLexer.C_COMMENT;
 
             /// <summary>Invalid patterns are skipped here; the configuration loader reports them as warnings.</summary>
             private static Regex TryRegex(string pattern)
@@ -106,76 +127,42 @@ namespace TcFormatter.Naming
                 }
             }
 
-            /// <summary>Header keyword of the checked declaration (FUNCTION_BLOCK, METHOD, ...), or null.</summary>
-            private string _headerKind;
-
-            private Token Current => _i < _tokens.Count ? _tokens[_i] : null;
-
-            private int LineOf(int position)
+            public void Run(StParser.DeclarationPartContext declaration, string objectName, string objectKind)
             {
-                int line = 0;
-                while (line + 1 < _lineStarts.Count && _lineStarts[line + 1] <= position)
-                    line++;
-                return line + 1;
-            }
+                var items = declaration.declarationItem();
+                CheckHeader(items.FirstOrDefault(i => i.SEMI() == null), objectName, objectKind);
 
-            private int ColumnOf(int position) => position - _lineStarts[LineOf(position) - 1] + 1;
-
-            public void Run(string objectName, string objectKind)
-            {
-                ReadHeader(objectName, objectKind);
-                while (_i < _tokens.Count)
+                foreach (var item in items)
                 {
-                    var t = _tokens[_i];
-                    if (t.Kind == TokenKind.Keyword && StLanguage.VarSectionKeywords.Contains(t.Text))
-                        ReadVarSection();
-                    else if (t.IsKeyword("STRUCT") || t.IsKeyword("UNION"))
-                        ReadMembers("STRUCT", false, "END_STRUCT", "END_UNION");
-                    else
-                        _i++;
+                    if (item.varSection() != null)
+                        CheckVarSection(item.varSection());
+                    else if (item.typeDeclaration() != null)
+                    {
+                        foreach (var definition in item.typeDeclaration().typeDefinition())
+                            CheckTypeDefinition(definition);
+                    }
                 }
             }
 
             // ---------------------------------------------------------- header
 
-            private void ReadHeader(string objectName, string objectKind)
+            /// <summary>The object itself: POU header, GVL or the kind passed by the caller.</summary>
+            private void CheckHeader(StParser.DeclarationItemContext first, string objectName, string objectKind)
             {
-                var first = Current;
-                if (first == null)
+                var header = first?.pouHeader();
+                if (header != null)
                 {
-                    if (objectName != null && objectKind != null)
-                        CheckObject(objectKind, objectName, 1, 1);
+                    _headerKind = header.Start.Text.ToUpperInvariant();
+                    var name = new NameToken(header.name().Start);
+                    CheckObject(_headerKind, name.Text, name.Line, name.Column);
                     return;
                 }
+                if (first?.typeDeclaration() != null)
+                    return; // checked with each type definition
 
-                string word = first.Kind == TokenKind.Keyword ? first.Upper : null;
-                switch (word)
-                {
-                    case "FUNCTION_BLOCK":
-                    case "FUNCTION":
-                    case "PROGRAM":
-                    case "INTERFACE":
-                    case "METHOD":
-                    case "PROPERTY":
-                    case "ACTION":
-                        _headerKind = word;
-                        _i++;
-                        while (Current != null && Current.Kind == TokenKind.Keyword && AccessModifiers.Contains(Current.Text))
-                            _i++;
-                        if (Current != null && Current.Kind == TokenKind.Identifier)
-                        {
-                            var name = Current;
-                            _i++;
-                            CheckObject(word, name.Text, LineOf(name.Position), ColumnOf(name.Position));
-                        }
-                        return;
-                    case "TYPE":
-                        _i++;
-                        ReadType();
-                        return;
-                }
-
-                if (first.IsKeyword("VAR_GLOBAL") || string.Equals(objectKind, "GVL", StringComparison.OrdinalIgnoreCase))
+                bool gvl = first?.varSection()?.varSectionKeyword().VAR_GLOBAL() != null ||
+                           string.Equals(objectKind, "GVL", StringComparison.OrdinalIgnoreCase);
+                if (gvl)
                 {
                     if (objectName != null)
                         CheckObject("GVL", objectName, 1, 1);
@@ -185,152 +172,79 @@ namespace TcFormatter.Naming
                     CheckObject(objectKind, objectName, 1, 1);
             }
 
-            private void ReadType()
+            private void CheckTypeDefinition(StParser.TypeDefinitionContext definition)
             {
-                if (Current == null || Current.Kind != TokenKind.Identifier)
-                    return;
-                var name = Current;
-                _i++;
-                while (Current != null && !Current.IsOperator(":"))
-                    _i++;
-                _i++; // ':'
-                string kind;
-                if (Current == null)
-                    kind = "ALIAS";
-                else if (Current.IsKeyword("STRUCT"))
-                    kind = "STRUCT";
-                else if (Current.IsKeyword("UNION"))
-                    kind = "UNION";
-                else if (Current.IsOperator("("))
-                    kind = "ENUM";
-                else
-                    kind = "ALIAS";
+                var body = definition.typeBody();
+                string kind = body.STRUCT() != null ? "STRUCT"
+                    : body.UNION() != null ? "UNION"
+                    : body.enumBody() != null ? "ENUM"
+                    : "ALIAS";
+                var name = new NameToken(definition.name().Start);
+                CheckObject(kind, name.Text, name.Line, name.Column);
 
-                CheckObject(kind, name.Text, LineOf(name.Position), ColumnOf(name.Position));
-
-                if (kind == "ENUM")
-                    ReadEnumValues();
-            }
-
-            private void ReadEnumValues()
-            {
-                _i++; // '('
-                bool expectName = true;
-                int depth = 0;
-                while (Current != null)
+                if (body.enumBody() != null)
                 {
-                    var t = Current;
-                    if (t.IsOperator("(")) depth++;
-                    else if (t.IsOperator(")"))
-                    {
-                        if (depth == 0)
-                        {
-                            _i++;
-                            return;
-                        }
-                        depth--;
-                    }
-                    else if (t.IsOperator(",") && depth == 0)
-                        expectName = true;
-                    else if (expectName && t.Kind == TokenKind.Identifier)
-                    {
-                        expectName = false;
-                        CheckEnumValue(t);
-                    }
-                    else
-                        expectName = false;
-                    _i++;
+                    foreach (var member in body.enumBody().enumMember())
+                        CheckEnumValue(new NameToken(member.name().Start));
                 }
+                // members of STRUCT and UNION are checked like the variables of a "STRUCT" section
+                CheckDeclarations(body.varDeclaration(), "STRUCT", false);
             }
 
             // ---------------------------------------------------------- variables
 
-            private void ReadVarSection()
+            private void CheckVarSection(StParser.VarSectionContext section)
             {
-                string section = Current.Upper;
-                _i++;
-                bool constant = false;
-                while (Current != null && Current.Kind == TokenKind.Keyword &&
-                       StLanguage.VarModifiers.Contains(Current.Text))
-                {
-                    constant |= Current.Is("CONSTANT");
-                    _i++;
-                }
-                ReadMembers(section, constant, "END_VAR");
+                string keyword = section.varSectionKeyword().Start.Text.ToUpperInvariant();
+                bool constant = section.varModifier().Any(m => m.CONSTANT() != null);
+                CheckDeclarations(section.varDeclaration(), keyword, constant);
             }
 
-            private void ReadMembers(string section, bool constant, params string[] terminators)
+            private void CheckDeclarations(IEnumerable<StParser.VarDeclarationContext> declarations, string section, bool constant)
             {
-                if (Current != null && (Current.IsKeyword("STRUCT") || Current.IsKeyword("UNION")))
-                    _i++;
                 bool check = _rules.CheckedSections == null ||
                              _rules.CheckedSections.Any(s => string.Equals(s, section, StringComparison.OrdinalIgnoreCase));
+                if (!check)
+                    return;
 
-                while (Current != null)
+                foreach (var declaration in declarations)
                 {
-                    if (Current.Kind == TokenKind.Keyword && terminators.Any(Current.Is))
-                    {
-                        _i++;
-                        return;
-                    }
-                    if (Current.Kind == TokenKind.Keyword && StLanguage.VarSectionKeywords.Contains(Current.Text))
-                        return; // malformed: missing END_VAR
-
-                    // names
-                    var names = new List<Token>();
-                    while (Current != null && !Current.IsOperator(":") && !Current.IsOperator(";") &&
-                           !(Current.Kind == TokenKind.Keyword && terminators.Any(Current.Is)))
-                    {
-                        if (Current.Kind == TokenKind.Identifier)
-                            names.Add(Current);
-                        else if (Current.IsKeyword("AT"))
-                        {
-                            _i++; // skip address
-                        }
-                        _i++;
-                    }
-                    if (Current == null || !Current.IsOperator(":"))
-                    {
-                        if (Current != null && Current.IsOperator(";"))
-                            _i++;
-                        continue;
-                    }
-                    _i++; // ':'
-
-                    // type until ':=' or ';' (depth 0)
-                    var type = new List<Token>();
-                    int depth = 0;
-                    while (Current != null)
-                    {
-                        if (depth == 0 && (Current.IsOperator(":=") || Current.IsOperator(";")))
-                            break;
-                        if (Current.IsOperator("(") || Current.IsOperator("[")) depth++;
-                        if (Current.IsOperator(")") || Current.IsOperator("]")) depth--;
-                        type.Add(Current);
-                        _i++;
-                    }
-                    // skip initializer
-                    depth = 0;
-                    while (Current != null && !(depth == 0 && Current.IsOperator(";")))
-                    {
-                        if (Current.IsOperator("(") || Current.IsOperator("[")) depth++;
-                        if (Current.IsOperator(")") || Current.IsOperator("]")) depth--;
-                        if (Current.Kind == TokenKind.Keyword && terminators.Any(Current.Is))
-                            break;
-                        _i++;
-                    }
-                    if (Current != null && Current.IsOperator(";"))
-                        _i++;
-
-                    if (check)
-                    {
-                        foreach (var name in names)
-                            CheckVariable(name, type, section, constant);
-                    }
+                    var names = declaration.variableNames();
+                    if (names == null)
+                        continue; // empty declaration ";"
+                    // every name of the list; in VAR_CONFIG every part of an instance path ("MAIN.fbX.bIn")
+                    foreach (var node in Terminals(names).Where(n => n.Symbol.Type == StLexer.IDENTIFIER))
+                        CheckVariable(new NameToken(node.Symbol), declaration.dataType(), section, constant);
                 }
             }
 
-            private void CheckVariable(Token name, List<Token> type, string section, bool constant)
+            private static IEnumerable<ITerminalNode> Terminals(IParseTree tree)
+            {
+                if (tree is ITerminalNode terminal)
+                {
+                    yield return terminal;
+                    yield break;
+                }
+                for (int i = 0; i < tree.ChildCount; i++)
+                {
+                    foreach (var t in Terminals(tree.GetChild(i)))
+                        yield return t;
+                }
+            }
+
+            /// <summary>The texts of the tokens of a type (for messages).</summary>
+            private IEnumerable<string> TypeTokens(StParser.DataTypeContext type)
+            {
+                if (type == null)
+                    yield break;
+                for (int i = type.Start.TokenIndex; i <= type.Stop.TokenIndex; i++)
+                {
+                    if (_tokens[i].Channel == TokenConstants.DefaultChannel)
+                        yield return _tokens[i].Text;
+                }
+            }
+
+            private void CheckVariable(NameToken name, StParser.DataTypeContext type, string section, bool constant)
             {
                 if (IsIgnored(name) || CheckIdentifier(name))
                     return;
@@ -338,7 +252,7 @@ namespace TcFormatter.Naming
                 if (severity == NamingSeverity.Off)
                     return;
 
-                var typePrefixes = ResolvePrefixes(type, 0, type.Count);
+                var typePrefixes = ResolvePrefixes(type);
                 if (typePrefixes == null)
                     return;
 
@@ -382,8 +296,8 @@ namespace TcFormatter.Naming
                 if (constantUpper)
                     suggestion = accepted[0] + ApplyCase(suggestion.Substring(accepted[0].Length), _rules.ConstantNameCase);
                 suggestion = lead + suggestion;
-                string typeText = string.Join(" ", type.Select(t => t.Text))
-                    .Replace(" [ ", "[").Replace(" ]", "]").Replace(" ( ", "(").Replace(" )", ")").Replace(" .. ", "..").Replace(" , ", ", ");
+                string typeText = string.Join(" ", TypeTokens(type))
+                    .Replace(" [ ", "[").Replace(" ]", "]").Replace(" ( ", "(").Replace(" )", ")").Replace(" .. ", "..").Replace(" . ", ".").Replace(" , ", ", ");
                 string expected = string.Join("' or '", accepted.Distinct());
                 Report(NamingRuleIds.VariablePrefix, severity, name,
                     $"Variable '{name.Text}' of type {typeText} should start with '{expected}'" +
@@ -467,42 +381,23 @@ namespace TcFormatter.Naming
                 return prefix + char.ToUpperInvariant(body[0]) + body.Substring(1);
             }
 
-            /// <summary>Accepted type prefixes for the type expression, or null when the type is unknown.</summary>
-            private List<string> ResolvePrefixes(List<Token> type, int start, int end)
+            /// <summary>Accepted type prefixes for the type, or null when the type is unknown (or an implicit enum).</summary>
+            private List<string> ResolvePrefixes(StParser.DataTypeContext type)
             {
-                if (start >= end)
+                if (type == null)
                     return null;
-                var first = type[start];
-
-                if (first.IsKeyword("ARRAY"))
-                {
-                    int of = -1, depth = 0;
-                    for (int i = start; i < end; i++)
-                    {
-                        if (type[i].IsOperator("[")) depth++;
-                        else if (type[i].IsOperator("]")) depth--;
-                        else if (depth == 0 && type[i].IsKeyword("OF"))
-                        {
-                            of = i;
-                            break;
-                        }
-                    }
-                    return Combine(_rules.ArrayPrefix, _rules.ArrayIncludesElementPrefix, of < 0 ? null : ResolvePrefixes(type, of + 1, end));
-                }
-                if ((first.IsKeyword("POINTER") || first.IsKeyword("REFERENCE")) && start + 1 < end && type[start + 1].IsKeyword("TO"))
-                {
-                    bool pointer = first.IsKeyword("POINTER");
-                    var target = ResolvePrefixes(type, start + 2, end);
-                    return pointer
-                        ? Combine(_rules.PointerPrefix, _rules.PointerIncludesTargetPrefix, target)
-                        : Combine(_rules.ReferencePrefix, _rules.ReferenceIncludesTargetPrefix, target);
-                }
+                if (type.ARRAY() != null)
+                    return Combine(_rules.ArrayPrefix, _rules.ArrayIncludesElementPrefix, ResolvePrefixes(type.dataType()));
+                if (type.POINTER() != null)
+                    return Combine(_rules.PointerPrefix, _rules.PointerIncludesTargetPrefix, ResolvePrefixes(type.dataType()));
+                if (type.REFERENCE() != null)
+                    return Combine(_rules.ReferencePrefix, _rules.ReferenceIncludesTargetPrefix, ResolvePrefixes(type.dataType()));
 
                 // base type name; qualified names (Tc2_Standard.TON) use the last part
-                string typeName = first.Text;
-                for (int i = start + 1; i + 1 < end && type[i].IsOperator("."); i += 2)
-                    typeName = type[i + 1].Text;
-
+                var qualified = type.qualifiedName();
+                string typeName = qualified == null
+                    ? type.Start.Text
+                    : (qualified.memberName().LastOrDefault()?.GetText() ?? qualified.Start.Text);
                 return LookupTypePrefix(typeName);
             }
 
@@ -605,7 +500,7 @@ namespace TcFormatter.Naming
                 return name;
             }
 
-            private void CheckEnumValue(Token value)
+            private void CheckEnumValue(NameToken value)
             {
                 if (IsIgnored(value) || CheckIdentifier(value) || _rules.EnumValueCase == NameCase.Any)
                     return;
@@ -618,8 +513,8 @@ namespace TcFormatter.Naming
             }
 
             /// <summary>Reports invalid identifiers; returns true when one was reported.</summary>
-            private bool CheckIdentifier(Token name) =>
-                CheckIdentifierText(name.Text, LineOf(name.Position), ColumnOf(name.Position));
+            private bool CheckIdentifier(NameToken name) =>
+                CheckIdentifierText(name.Text, name.Line, name.Column);
 
             private bool CheckIdentifierText(string name, int line, int column)
             {
@@ -638,12 +533,12 @@ namespace TcFormatter.Naming
                 return true;
             }
 
-            private bool IsIgnored(Token name) => _ignoredLines.Contains(LineOf(name.Position)) || IsIgnoredName(name.Text);
+            private bool IsIgnored(NameToken name) => _ignoredLines.Contains(name.Line) || IsIgnoredName(name.Text);
 
             private bool IsIgnoredName(string name) => _ignore.Any(r => r.IsMatch(name));
 
-            private void Report(string ruleId, NamingSeverity severity, Token name, string message, string suggestion) =>
-                Report(ruleId, severity, name.Text, LineOf(name.Position), ColumnOf(name.Position), message, suggestion);
+            private void Report(string ruleId, NamingSeverity severity, NameToken name, string message, string suggestion) =>
+                Report(ruleId, severity, name.Text, name.Line, name.Column, message, suggestion);
 
             private void Report(string ruleId, NamingSeverity severity, string name, int line, int column, string message, string suggestion) =>
                 _out.Add(new NamingDiagnostic(ruleId, severity, name, message, line, column, suggestion));

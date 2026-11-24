@@ -32,7 +32,7 @@ Der Vergleich nach dem Formatieren. Das Ergebnis muss dieselben bedeutungstragen
 _Avoid_: Äquivalenzprüfung, Validierung
 
 **Ablehnung**:
-Ein Code-Teil wird nicht formatiert, weil er einen Syntaxfehler enthält oder den Safety-Check nicht besteht. Er bleibt dann unverändert, und der Grund wird gemeldet.
+Ein Code-Teil wird nicht formatiert oder seine Namen werden nicht geprüft, weil er einen Syntaxfehler enthält oder (beim Formatieren) den Safety-Check nicht besteht. Er bleibt dann unverändert, und der Grund wird gemeldet.
 _Avoid_: Abbruch, Fehlschlag
 
 **Verbatim-Bereich**:
