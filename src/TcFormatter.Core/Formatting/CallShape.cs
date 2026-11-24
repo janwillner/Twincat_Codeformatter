@@ -51,6 +51,8 @@ namespace TcFormatter.Formatting
                     {
                         if (j > argStart)
                             shape.Arguments.Add((argStart, j));
+                        else if (shape.Arguments.Count > 0)
+                            return null; // trailing comma "fb(a := 1, );": keep the call as written
                         shape.CloseParen = j;
                         break;
                     }

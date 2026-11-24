@@ -1,4 +1,5 @@
 using System;
+using TcFormatter.Syntax;
 
 namespace TcFormatter.Formatting
 {
@@ -41,7 +42,10 @@ namespace TcFormatter.Formatting
             string formatted;
             try
             {
-                formatted = new FormatEngine(code, part, options).Run();
+                var parse = StSyntax.ParseTree(code, part);
+                if (parse.Error != null)
+                    return new FormatResult(code, false, "Syntax error, code left unchanged: " + parse.Error);
+                formatted = new FormatEngine(code, part, options, parse).Run();
             }
             catch (Exception ex)
             {

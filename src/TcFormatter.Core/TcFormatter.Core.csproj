@@ -15,4 +15,25 @@
     <InternalsVisibleTo Include="TcFormatter.Core.Tests" />
   </ItemGroup>
 
+  <!--
+    Structured Text grammar (Grammar/*.g4). Antlr4BuildTasks generates the C# lexer and parser on every build
+    and downloads a Java runtime and the ANTLR tool when no Java is installed. The tool version follows the
+    Antlr4.Runtime.Standard version below.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
+    <PackageReference Include="Antlr4BuildTasks" Version="12.10.0" PrivateAssets="all" IncludeAssets="build" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Antlr4 Include="Grammar\StLexer.g4">
+      <Package>TcFormatter.Syntax.Generated</Package>
+    </Antlr4>
+    <Antlr4 Include="Grammar\StParser.g4">
+      <Package>TcFormatter.Syntax.Generated</Package>
+      <Listener>true</Listener>
+      <Visitor>false</Visitor>
+    </Antlr4>
+  </ItemGroup>
+
 </Project>

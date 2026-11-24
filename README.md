@@ -6,7 +6,7 @@ Code-Formatter und Namensprüfung für **TwinCAT 3 Structured Text**, als Extens
 - Formatiert einen **einzelnen Baustein**, einen **Ordner** oder ein **ganzes PLC-Projekt**: POUs, Methoden, Properties, Aktionen, Transitionen, DUTs, GVLs und Interfaces.
 - Bietet **über 100 Einstellungen** (vergleichbar mit STweep oder Black). Sie werden über *Extras → Optionen → TcFormatter* oder eine `.tcformat.json` im Projekt gesetzt.
 - Prüft Namen mit **einstellbaren Präfixen pro Datentyp**, Variablenbereich und Objektart. Standard ist die Beckhoff-Hungarian-Notation.
-- **Formatiert sicher wie Black:** Das Ergebnis muss dieselben Tokens enthalten wie das Original, sonst bleibt der Code unverändert. Ein zweiter Lauf ändert nichts mehr (idempotent).
+- **Formatiert sicher wie Black:** Der Code wird mit einer ANTLR-Grammatik geparst. Code mit Syntaxfehler bleibt unverändert, die Meldung nennt Zeile und Spalte. Das Ergebnis muss dieselben Tokens enthalten wie das Original, sonst bleibt der Code ebenfalls unverändert. Ein zweiter Lauf ändert nichts mehr (idempotent).
 - Bereiche zwischen `// tcfmt: off` und `// tcfmt: on` bleiben unverändert.
 
 ## Installation (IDE)
@@ -207,7 +207,8 @@ Nicht automatisch prüfbar sind:
 
 - **TwinCAT 3.1.4026 (TcXaeShell 64 bit):** installiert und getestet. Formatieren von Objekt, Ordner und Projekt, Namensprüfung mit Fehlerliste, danach „Check all objects“ ohne Fehler.
 - **TwinCAT 3.1.4024 (TcXaeShell 32 bit):** Die VSIX ist dafür gebaut (Manifestziel `[15.0,17.0) x86`, VS SDK 15.0, Typbibliothek 3.3). Auf dem Entwicklungsrechner war 4024 aber nicht installiert, daher ist sie dort **noch nicht live getestet**.
-- **Unit-Tests:** `dotnet test`, über 160 Tests, darunter Golden-Files aus dem Testprojekt. Jeder Formatter-Test prüft automatisch auch die Idempotenz.
+- **Unit-Tests:** `dotnet test`, über 400 Tests, darunter Golden-Files aus dem Testprojekt und Parser-Tests pro Sprachkonstrukt. Jeder Formatter-Test prüft automatisch auch die Idempotenz und dass die Eingabe ohne Syntaxfehler parst.
+- **Korpus-Test (lokal):** Liegt unter `TestProject/PLC/` ein großes TwinCAT-Projekt, parsen und formatieren die `ParserCorpusTests` jedes Objekt darin zweimal (keine Syntaxfehler, keine Ablehnung, stabil). Der Ordner wird von git ignoriert; ohne ihn sind die Tests leer. Mit `TCFMT_CORPUS_REPORT=<datei>` schreibt der Test alle Syntaxfehler samt Kontext in eine Datei.
 - **Integrationstest am Testprojekt** (`TestProject/`):
   1. unordentlichen Code ins Projekt schreiben,
   2. `TcFormatter.FormatAll` ausführen,
@@ -217,13 +218,22 @@ Nicht automatisch prüfbar sind:
 ## Entwicklung
 
 ```text
-src/TcFormatter.Core    Lexer, Formatter, Naming-Checker, Konfiguration (netstandard2.0 + net472, ohne Abhängigkeiten)
+src/TcFormatter.Core    Grammatik, Parser, Formatter, Naming-Checker, Konfiguration (netstandard2.0 + net472, einzige Abhängigkeit Antlr4.Runtime.Standard)
 src/TcFormatter.Cli     tcfmt (net8.0)
 src/TcFormatter.Vsix    Extension (net472, VS SDK 15.0 → läuft in VS 15/16/17)
 tests/                  xUnit-Tests inkl. Golden-Files aus dem TwinCAT-Testprojekt
 TestProject/            TwinCAT-Projekt zum Testen (formatiert, baut mit 0 Fehlern)
 lib/TCatSysManagerLib   Interop aus TypeLib 3.3 (eingebettet, kompatibel mit 4024 und 4026)
 ```
+
+### Grammatik
+
+Lexer und Parser entstehen beim Build aus [StLexer.g4](src/TcFormatter.Core/Grammar/StLexer.g4) und
+[StParser.g4](src/TcFormatter.Core/Grammar/StParser.g4) (ANTLR 4.13.1 über `Antlr4BuildTasks`). Java muss dafür nicht
+installiert sein: Beim ersten Build lädt das Paket ein JRE und das ANTLR-Jar herunter. Es gibt zwei Einstiegsregeln,
+`declarationPart` und `implementationPart`, eine pro Code-Teil. Die Gründe für den Aufbau stehen in
+[ADR 0001](docs/adr/0001-antlr-parser.md), die Begriffe in [GLOSSARY.md](GLOSSARY.md). Neue Schlüsselwörter und
+Typnamen gehören in die `.g4` **und** in `Lexing/StLanguage.cs`; ein Test prüft, dass beide übereinstimmen.
 
 ### Build-Pipeline und Releases
 

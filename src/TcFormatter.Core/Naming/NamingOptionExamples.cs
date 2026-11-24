@@ -70,6 +70,9 @@ namespace TcFormatter.Naming
 
         public static bool Has(string option) => option != null && Examples.ContainsKey(option);
 
+        /// <summary>The declaration code of every example (used by tests).</summary>
+        internal static IEnumerable<string> Codes => Examples.Values.Select(e => e.Code);
+
         /// <summary>Checks the example of <paramref name="option"/> with <paramref name="current"/>.</summary>
         public static OptionPreview Preview(string option, NamingRules current)
         {

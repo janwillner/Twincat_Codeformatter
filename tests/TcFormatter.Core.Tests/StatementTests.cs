@@ -90,13 +90,13 @@ public class StatementTests : FormatterTestBase
     }
 
     [Fact]
-    public void Refuses_to_change_code_when_the_safety_check_fails()
+    public void Refuses_to_change_unbalanced_code()
     {
-        // unbalanced and odd code must never be destroyed
+        // unbalanced and odd code must never be destroyed: the parser rejects it and the input comes back unchanged
         var input = "IF a THEN\nx := (1 + ;\nEND_CASE\n@@@ ;";
         var result = StFormatter.Format(input, CodePart.Implementation, Options());
-        Assert.Null(result.Error);
-        Assert.Equal(StFormatter.Format(result.Text, CodePart.Implementation, Options()).Text, result.Text);
+        Assert.StartsWith("Syntax error", result.Error);
+        Assert.Equal(input, result.Text);
     }
 }
 

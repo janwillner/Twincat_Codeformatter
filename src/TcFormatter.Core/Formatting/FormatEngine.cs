@@ -4,13 +4,15 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using TcFormatter.Lexing;
+using TcFormatter.Syntax;
 
 namespace TcFormatter.Formatting
 {
     /// <summary>
     /// Token based formatter. Keeps the user's line structure (except for statement splitting, joining of
     /// wrapped lists and the line break options) and recomputes indentation, spacing, casing, alignment and
-    /// blank lines.
+    /// blank lines. The tokens and their roles (unary operators, label colons, argument assignments) come from the
+    /// parse tree (<see cref="TokenRoles"/>), so the code must parse without syntax errors.
     /// </summary>
     internal sealed class FormatEngine
     {
@@ -44,24 +46,29 @@ namespace TcFormatter.Formatting
         private int _statementLevel;
         private Line _statementHead;
 
-        private Token _prevSignificant;
         private int _frameIds;
 
-        public FormatEngine(string source, CodePart part, FormatterOptions options)
+        private readonly TokenRoles _roles;
+
+        /// <param name="parse">The parse result of <paramref name="source"/>; it must be free of syntax errors.</param>
+        public FormatEngine(string source, CodePart part, FormatterOptions options, ParseResult parse)
         {
             _source = source;
             _part = part;
             _o = options;
+            _roles = TokenRoles.From(parse);
         }
 
+        /// <summary>Prefix '+' and '-' (from the parse tree).</summary>
         internal HashSet<Token> UnaryOperators { get; } = new HashSet<Token>();
 
+        /// <summary>The ':' of CASE labels at the start of a line (found through the parse tree).</summary>
         internal HashSet<Token> CaseLabelColons { get; } = new HashSet<Token>();
 
         /// <summary>The ':' of jump labels ("lbl_End:"); they end a statement like case labels.</summary>
         internal HashSet<Token> JumpLabelColons { get; } = new HashSet<Token>();
 
-        /// <summary>':=' and '=>' inside parentheses (named call arguments, FB initialisation).</summary>
+        /// <summary>':=' and '=>' of named call arguments, FB / struct initialisation and enum values (from the parse tree).</summary>
         internal HashSet<Token> ArgumentAssignments { get; } = new HashSet<Token>();
 
         /// <summary>Tokens that were preceded by whitespace in the source (used for unknown characters).</summary>
@@ -69,7 +76,9 @@ namespace TcFormatter.Formatting
 
         public string Run()
         {
-            var tokens = Lexer.Tokenize(_source).ToList();
+            var tokens = _roles.Tokens;
+            UnaryOperators.UnionWith(_roles.UnaryOperators);
+            ArgumentAssignments.UnionWith(_roles.ArgumentAssignments);
             if (CommentLineEndMarkers.Enabled(_o))
             {
                 for (int i = 0; i < tokens.Count; i++)
@@ -320,7 +329,7 @@ namespace TcFormatter.Formatting
 
             var first = line.Tokens[0];
             line.StartsWithCloser = IsCloser(first);
-            bool thenOrDo = first.IsKeyword("THEN") || first.IsKeyword("DO");
+            bool thenOrDo = IsBlockKeyword(first) && (first.Is("THEN") || first.Is("DO"));
             if ((line.StartsWithCloser || thenOrDo) && _paren == 0)
                 _open = false;
 
@@ -418,7 +427,7 @@ namespace TcFormatter.Formatting
 
         private int LevelForStatementStart(Token first, bool isCaseLabel)
         {
-            if (first.Kind == TokenKind.Keyword)
+            if (IsBlockKeyword(first))
             {
                 switch (first.Upper)
                 {
@@ -459,11 +468,14 @@ namespace TcFormatter.Formatting
 
         private int LevelOf(Frame f) => f?.Level ?? BodyLevel();
 
-        private static bool IsCloser(Token t)
+        /// <summary>The token opens, continues or closes a block according to the parse tree (IF, THEN, END_VAR, ...).</summary>
+        private bool IsBlockKeyword(Token t) => _roles.BlockKeywords.Contains(t);
+
+        private bool IsCloser(Token t)
         {
             if (t.Kind == TokenKind.Pragma)
                 return IsEndRegion(t);
-            if (t.Kind != TokenKind.Keyword)
+            if (!IsBlockKeyword(t))
                 return false;
             switch (t.Upper)
             {
@@ -489,47 +501,25 @@ namespace TcFormatter.Formatting
 
         private static bool IsEndRegion(Token t) => t.Kind == TokenKind.Pragma && PragmaWord(t) == "endregion";
 
-        /// <summary>Returns the index of the ':' that terminates a CASE label at the start of the line, or -1.</summary>
-        /// <summary>Index of the ':' of a jump label line "name:" (comments may follow), or -1.</summary>
-        private static int FindJumpLabelColon(List<Token> tokens)
-        {
-            var code = tokens.Select((t, i) => (t, i)).Where(p => !p.t.IsComment && p.t.Kind != TokenKind.Pragma).ToList();
-            return code.Count == 2 && code[0].t.Kind == TokenKind.Identifier && code[1].t.IsOperator(":") ? code[1].i : -1;
-        }
+        /// <summary>Index of the ':' of a jump label "name:" at the start of the line, or -1 (from the parse tree).</summary>
+        private int FindJumpLabelColon(List<Token> tokens) => FindLabelColon(tokens, _roles.JumpLabelColonByName);
 
-        private static int FindCaseLabelColon(List<Token> tokens)
+        /// <summary>Index of the ':' that ends the CASE labels at the start of the line, or -1 (from the parse tree).</summary>
+        private int FindCaseLabelColon(List<Token> tokens) => FindLabelColon(tokens, _roles.CaseLabelColonByFirstToken);
+
+        private static int FindLabelColon(List<Token> tokens, Dictionary<Token, Token> colonByFirstToken)
         {
-            int depth = 0;
-            bool any = false;
-            for (int k = 0; k < tokens.Count; k++)
-            {
-                var t = tokens[k];
-                if (t.IsComment || t.Kind == TokenKind.Pragma)
-                    continue;
-                if (t.Kind == TokenKind.Operator)
-                {
-                    switch (t.Text)
-                    {
-                        case "(": case "[": depth++; continue;
-                        case ")": case "]": depth--; continue;
-                        case ":": return depth == 0 && any ? k : -1;
-                        case ";": case ":=": case "=>": return -1;
-                    }
-                    if (StLanguage.IsAssignmentOperator(t))
-                        return -1; // S= R= REF=
-                }
-                if (t.Kind == TokenKind.Keyword && !t.Is("TRUE") && !t.Is("FALSE"))
-                    return -1;
-                any = true;
-            }
-            return -1;
+            var first = tokens.FirstOrDefault(t => !t.IsComment && t.Kind != TokenKind.Pragma);
+            if (first == null || !colonByFirstToken.TryGetValue(first, out var colon))
+                return -1;
+            return tokens.IndexOf(colon);
         }
 
         /// <summary>Line break before THEN / DO / STRUCT when configured (the keyword starts a new line).</summary>
         private bool SplitBefore(List<Token> tokens, int k)
         {
             var t = tokens[k];
-            if (t.Kind != TokenKind.Keyword)
+            if (!IsBlockKeyword(t))
                 return false;
             if (t.Is("THEN"))
                 return _o.LineBreakBeforeThen;
@@ -595,13 +585,8 @@ namespace TcFormatter.Formatting
                         case "]":
                             _paren = Math.Max(0, _paren - 1);
                             break;
-                        case ":=":
-                        case "=>":
-                            if (_paren > 0)
-                                ArgumentAssignments.Add(t);
-                            break;
                         case ";":
-                            if (_paren == 0)
+                            if (_roles.StatementEnds.Contains(t))
                             {
                                 _open = false;
                                 _conditionOpen = false;
@@ -629,14 +614,9 @@ namespace TcFormatter.Formatting
                                     splitAfter = k;
                             }
                             break;
-                        case "-":
-                        case "+":
-                            if (IsUnaryContext(_prevSignificant))
-                                UnaryOperators.Add(t);
-                            break;
                     }
                 }
-                else if (t.Kind == TokenKind.Keyword)
+                else if (IsBlockKeyword(t))
                 {
                     int keywordSplit = -1;
                     structural = HandleKeyword(tokens, ref k, lineLevel, ref keywordSplit, ref opensBlock);
@@ -647,7 +627,6 @@ namespace TcFormatter.Formatting
 
                 if (!structural && StatementContext)
                     _open = true;
-                _prevSignificant = t;
 
                 if (splitAfter >= 0 && maySplit && HasCodeAfter(tokens, splitAfter))
                 {
@@ -889,17 +868,6 @@ namespace TcFormatter.Formatting
             if (_o.ExpandSingleLineBlocks || (_o.OneStatementPerLine && _inlineBlocks == 0))
                 splitAfter = k;
             return true;
-        }
-
-        private static bool IsUnaryContext(Token previous)
-        {
-            if (previous == null)
-                return true;
-            if (previous.Kind == TokenKind.Operator)
-                return previous.Text != ")" && previous.Text != "]" && previous.Text != "^";
-            if (previous.Kind == TokenKind.Keyword)
-                return !(previous.Is("TRUE") || previous.Is("FALSE") || previous.Is("THIS") || previous.Is("SUPER"));
-            return false;
         }
 
         private static bool HasCodeAfter(List<Token> tokens, int index)
