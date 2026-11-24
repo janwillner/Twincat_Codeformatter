@@ -497,3 +497,6 @@ _Libraries/
 LineIDs.dbg*
 *.TcOptions
 *.bak
+
+# Large local TwinCAT project used as parser corpus (ParserCorpusTests), not part of the repository
+TestProject/PLC/
